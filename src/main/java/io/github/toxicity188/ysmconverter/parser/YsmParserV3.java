@@ -17,6 +17,10 @@ import io.github.toxicity188.ysmconverter.crypto.Mt19937Cipher;
 import io.github.toxicity188.ysmconverter.format.VersionDetector;
 import io.github.toxicity188.ysmconverter.model.GeometrySolver;
 import io.github.toxicity188.ysmconverter.model.GeometryTypes.*;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
+import org.jetbrains.annotations.UnmodifiableView;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -36,26 +40,26 @@ import java.util.*;
  */
 public final class YsmParserV3 implements YsmParser {
 
-    private final byte[] buffer;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final byte @NotNull [] buffer;
+    private final @NotNull ObjectMapper mapper = new ObjectMapper();
 
     private int formatVersion;
-    private byte[] decryptedData;
-    private byte[] decompressedData;
+    private byte @Nullable [] decryptedData;
+    private byte @Nullable [] decompressedData;
 
-    private final Map<String, String> subEntityCategories = new LinkedHashMap<>();
-    private final Map<String, byte[]> soundFiles = new LinkedHashMap<>();
-    private final Map<String, byte[]> functionFiles = new LinkedHashMap<>();
-    private final Map<String, byte[]> languageFiles = new LinkedHashMap<>();
-    private final Map<String, byte[]> animControllerFiles = new LinkedHashMap<>();
-    private final Map<String, byte[]> textureFiles = new LinkedHashMap<>();
-    private final Map<String, byte[]> specialImageFiles = new LinkedHashMap<>();
-    private final Map<String, byte[]> avatarFiles = new LinkedHashMap<>();
-    private final Map<String, byte[]> modelFiles = new LinkedHashMap<>();
-    private final Map<String, byte[]> animationFiles = new LinkedHashMap<>();
-    private final Map<String, byte[]> backgroundFiles = new LinkedHashMap<>();
-    private byte[] infoJsonFile;
-    private byte[] ysmJsonFile;
+    private final @NotNull Map<@NotNull String, @NotNull String> subEntityCategories = new LinkedHashMap<>();
+    private final @NotNull Map<@NotNull String, byte @NotNull []> soundFiles = new LinkedHashMap<>();
+    private final @NotNull Map<@NotNull String, byte @NotNull []> functionFiles = new LinkedHashMap<>();
+    private final @NotNull Map<@NotNull String, byte @NotNull []> languageFiles = new LinkedHashMap<>();
+    private final @NotNull Map<@NotNull String, byte @NotNull []> animControllerFiles = new LinkedHashMap<>();
+    private final @NotNull Map<@NotNull String, byte @NotNull []> textureFiles = new LinkedHashMap<>();
+    private final @NotNull Map<@NotNull String, byte @NotNull []> specialImageFiles = new LinkedHashMap<>();
+    private final @NotNull Map<@NotNull String, byte @NotNull []> avatarFiles = new LinkedHashMap<>();
+    private final @NotNull Map<@NotNull String, byte @NotNull []> modelFiles = new LinkedHashMap<>();
+    private final @NotNull Map<@NotNull String, byte @NotNull []> animationFiles = new LinkedHashMap<>();
+    private final @NotNull Map<@NotNull String, byte @NotNull []> backgroundFiles = new LinkedHashMap<>();
+    private byte @Nullable [] infoJsonFile;
+    private byte @Nullable [] ysmJsonFile;
 
     private boolean formatJson = false;
 
@@ -64,8 +68,8 @@ public final class YsmParserV3 implements YsmParser {
      *
      * @param buffer raw .ysm file data
      */
-    public YsmParserV3(byte[] buffer) {
-        this.buffer = buffer;
+    public YsmParserV3(byte @NotNull [] buffer) {
+        this.buffer = Objects.requireNonNull(buffer, "buffer must not be null");
     }
 
     /**
@@ -82,7 +86,7 @@ public final class YsmParserV3 implements YsmParser {
         }
     }
 
-    private final List<String> warnings = new ArrayList<>();
+    private final @NotNull List<@NotNull String> warnings = new ArrayList<>();
 
     @Override
     public int getYSGPVersion() {
@@ -96,7 +100,7 @@ public final class YsmParserV3 implements YsmParser {
      */
     @Override
     public int getFormatVersion() {
-        if (formatVersion == 0 && buffer != null && buffer.length >= 8) {
+        if (formatVersion == 0 && buffer.length >= 8) {
             for (var i = 0; i < buffer.length; i++) {
                 if (buffer[i] == 0) {
                     var headerString = new String(buffer, 0, i, StandardCharsets.UTF_8);
@@ -112,12 +116,12 @@ public final class YsmParserV3 implements YsmParser {
     }
 
     @Override
-    public List<String> getWarnings() {
+    public @NotNull @Unmodifiable List<@NotNull String> getWarnings() {
         return Collections.unmodifiableList(warnings);
     }
 
     @Override
-    public byte[] getDecryptedData() {
+    public byte @NotNull [] getDecryptedData() {
         return decompressedData != null ? decompressedData : new byte[0];
     }
 
@@ -1615,7 +1619,8 @@ public final class YsmParserV3 implements YsmParser {
     }
 
     @Override
-    public void saveToDirectory(Path outputDirectory) throws IOException {
+    public void saveToDirectory(@NotNull Path outputDirectory) throws IOException {
+        Objects.requireNonNull(outputDirectory, "outputDirectory must not be null");
         boolean useLegacyRootLayout = (ysmJsonFile == null || ysmJsonFile.length == 0);
 
         if (useLegacyRootLayout) {
@@ -1682,7 +1687,7 @@ public final class YsmParserV3 implements YsmParser {
     }
 
     @Override
-    public Map<String, byte[]> getExtractedResources() {
+    public @NotNull @UnmodifiableView Map<@NotNull String, byte @NotNull []> getExtractedResources() {
         var map = new LinkedHashMap<String, byte[]>();
         boolean useLegacyRootLayout = (ysmJsonFile == null || ysmJsonFile.length == 0);
 

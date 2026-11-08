@@ -3,6 +3,8 @@ package io.github.toxicity188.ysmconverter.parser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -16,17 +18,21 @@ import java.util.Map;
  */
 public final class PlayerTextureCollector {
 
-    private record Entry(String baseName, List<Variant> variants, Map<String, Integer> variantIndex) {
-        Entry(String baseName) {
+    private record Entry(
+            @NotNull String baseName,
+            @NotNull List<@NotNull Variant> variants,
+            @NotNull Map<@NotNull String, @NotNull Integer> variantIndex
+    ) {
+        Entry(@NotNull String baseName) {
             this(baseName, new ArrayList<>(), new LinkedHashMap<>());
         }
     }
 
     private static final class Variant {
-        final String type;
-        String path;
+        final @NotNull String type;
+        @NotNull String path;
 
-        Variant(String type, String path) {
+        Variant(@NotNull String type, @NotNull String path) {
             this.type = type;
             this.path = path;
         }
@@ -47,7 +53,8 @@ public final class PlayerTextureCollector {
      * @param rawName raw texture identifier
      * @return 2-element array [baseName, type]
      */
-    public static String[] splitName(String rawName) {
+    @CheckReturnValue
+    public static @NotNull String @NotNull [] splitName(@NotNull String rawName) {
         int pos = rawName.indexOf('/');
         if (pos == -1) {
             return new String[]{rawName, "uv"};
@@ -61,7 +68,7 @@ public final class PlayerTextureCollector {
      * @param rawName raw texture identifier (may include {@code "/variant"})
      * @param path    relative path to the texture file
      */
-    public void add(String rawName, String path) {
+    public void add(@NotNull String rawName, @NotNull String path) {
         String[] split = splitName(rawName);
         String baseName = split[0];
         String type = split[1];
@@ -91,7 +98,7 @@ public final class PlayerTextureCollector {
      * @param playerNode player JSON node
      * @param mapper     Jackson object mapper
      */
-    public void emitTo(ObjectNode playerNode, ObjectMapper mapper) {
+    public void emitTo(@NotNull ObjectNode playerNode, @NotNull ObjectMapper mapper) {
         if (entries.isEmpty()) {
             return;
         }

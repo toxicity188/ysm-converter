@@ -1,8 +1,11 @@
 package io.github.toxicity188.ysmconverter.model;
 
 import io.github.toxicity188.ysmconverter.binary.Vector3D;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Unmodifiable;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Common geometry model types used during YSM model parsing and geometry reconstruction.
@@ -22,7 +25,14 @@ public final class GeometryTypes {
      * @param v   V texture coordinate (0.0 to 1.0)
      * @since 1.0.0
      */
-    public record Vertex(Vector3D vec, float u, float v) {
+    public record Vertex(@NotNull Vector3D vec, float u, float v) {
+
+        /**
+         * Validates non-null position vector.
+         */
+        public Vertex {
+            Objects.requireNonNull(vec, "vec must not be null");
+        }
     }
 
     /**
@@ -32,7 +42,15 @@ public final class GeometryTypes {
      * @param vertices four vertices forming the quad
      * @since 1.0.0
      */
-    public record Face(Vector3D normal, Vertex[] vertices) {
+    public record Face(@NotNull Vector3D normal, @NotNull Vertex @NotNull [] vertices) {
+
+        /**
+         * Validates non-null normal and vertices.
+         */
+        public Face {
+            Objects.requireNonNull(normal, "normal must not be null");
+            Objects.requireNonNull(vertices, "vertices must not be null");
+        }
     }
 
     /**
@@ -55,16 +73,27 @@ public final class GeometryTypes {
      * @param inflate  inflation amount
      * @param pivot    cube rotation pivot point
      * @param rotation rotation angles in degrees (Euler XYZ)
-     * @param uv       map of face names (north, south, east, west, up, down) to UV boxes
+     * @param uv       unmodifiable map of face names (north, south, east, west, up, down) to UV boxes
      * @since 1.0.0
      */
     public record BlockbenchCube(
-            Vector3D origin,
-            Vector3D size,
+            @NotNull Vector3D origin,
+            @NotNull Vector3D size,
             float inflate,
-            Vector3D pivot,
-            Vector3D rotation,
-            Map<String, UvBox> uv
+            @NotNull Vector3D pivot,
+            @NotNull Vector3D rotation,
+            @NotNull @Unmodifiable Map<@NotNull String, @NotNull UvBox> uv
     ) {
+
+        /**
+         * Compact constructor ensuring non-null components and unmodifiable UV map snapshot.
+         */
+        public BlockbenchCube {
+            Objects.requireNonNull(origin, "origin must not be null");
+            Objects.requireNonNull(size, "size must not be null");
+            Objects.requireNonNull(pivot, "pivot must not be null");
+            Objects.requireNonNull(rotation, "rotation must not be null");
+            uv = Map.copyOf(uv);
+        }
     }
 }

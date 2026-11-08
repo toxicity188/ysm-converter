@@ -1,5 +1,7 @@
 package io.github.toxicity188.ysmconverter.crypto;
 
+import org.jetbrains.annotations.CheckReturnValue;
+
 /**
  * Pure Java implementation of 64-bit Mersenne Twister pseudorandom number generator,
  * exactly matching C++ {@code std::mt19937_64}.
@@ -48,6 +50,7 @@ public final class MersenneTwister64 {
      *
      * @return the next 64-bit integer
      */
+    @CheckReturnValue
     public long nextLong() {
         if (mti >= NN) {
             for (int i = 0; i < NN - MM; i++) {

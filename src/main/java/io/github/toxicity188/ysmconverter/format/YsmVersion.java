@@ -1,5 +1,8 @@
 package io.github.toxicity188.ysmconverter.format;
 
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.Range;
+
 /**
  * Enumeration of supported YSM format major versions.
  *
@@ -32,6 +35,8 @@ public enum YsmVersion {
      *
      * @return major version number
      */
+    @CheckReturnValue
+    @Range(from = 1, to = 3)
     public int getMajorNumber() {
         return majorNumber;
     }

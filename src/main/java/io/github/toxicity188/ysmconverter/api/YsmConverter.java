@@ -3,6 +3,8 @@ package io.github.toxicity188.ysmconverter.api;
 import io.github.toxicity188.ysmconverter.format.VersionDetector;
 import io.github.toxicity188.ysmconverter.format.YsmVersion;
 import io.github.toxicity188.ysmconverter.parser.PathSanitizer;
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -34,7 +36,8 @@ public final class YsmConverter {
      * @return parsing result containing summary metadata
      * @throws IOException if reading, parsing, or file extraction fails
      */
-    public static YsmParseResult parse(Path ysmFilePath, Path outputDir) throws IOException {
+    @CheckReturnValue
+    public static @NotNull YsmParseResult parse(@NotNull Path ysmFilePath, @NotNull Path outputDir) throws IOException {
         Objects.requireNonNull(ysmFilePath, "ysmFilePath must not be null");
         Objects.requireNonNull(outputDir, "outputDir must not be null");
         var data = Files.readAllBytes(ysmFilePath);
@@ -49,7 +52,8 @@ public final class YsmConverter {
      * @return parsing result containing summary metadata
      * @throws IOException if parsing or file extraction fails
      */
-    public static YsmParseResult parse(byte[] ysmData, Path outputDir) throws IOException {
+    @CheckReturnValue
+    public static @NotNull YsmParseResult parse(byte @NotNull [] ysmData, @NotNull Path outputDir) throws IOException {
         Objects.requireNonNull(ysmData, "ysmData must not be null");
         Objects.requireNonNull(outputDir, "outputDir must not be null");
 
@@ -79,7 +83,8 @@ public final class YsmConverter {
      * @return detected major version
      * @throws IOException if reading the file fails
      */
-    public static YsmVersion getVersion(Path ysmFilePath) throws IOException {
+    @CheckReturnValue
+    public static @NotNull YsmVersion getVersion(@NotNull Path ysmFilePath) throws IOException {
         Objects.requireNonNull(ysmFilePath, "ysmFilePath must not be null");
         var data = Files.readAllBytes(ysmFilePath);
         return getVersion(data);
@@ -91,7 +96,8 @@ public final class YsmConverter {
      * @param ysmData raw .ysm binary bytes
      * @return detected major version
      */
-    public static YsmVersion getVersion(byte[] ysmData) {
+    @CheckReturnValue
+    public static @NotNull YsmVersion getVersion(byte @NotNull [] ysmData) {
         return VersionDetector.detectVersion(ysmData);
     }
 
@@ -102,7 +108,8 @@ public final class YsmConverter {
      * @return format version number
      * @throws IOException if reading the file fails
      */
-    public static int getFormatVersion(Path ysmFilePath) throws IOException {
+    @CheckReturnValue
+    public static int getFormatVersion(@NotNull Path ysmFilePath) throws IOException {
         Objects.requireNonNull(ysmFilePath, "ysmFilePath must not be null");
         var data = Files.readAllBytes(ysmFilePath);
         return getFormatVersion(data);
@@ -114,7 +121,8 @@ public final class YsmConverter {
      * @param ysmData raw .ysm binary bytes
      * @return format version number
      */
-    public static int getFormatVersion(byte[] ysmData) {
+    @CheckReturnValue
+    public static int getFormatVersion(byte @NotNull [] ysmData) {
         var parser = YsmParserFactory.create(ysmData);
         return parser.getFormatVersion();
     }

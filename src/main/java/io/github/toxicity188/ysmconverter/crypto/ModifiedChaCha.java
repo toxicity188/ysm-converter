@@ -1,5 +1,8 @@
 package io.github.toxicity188.ysmconverter.crypto;
 
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Implements the YSM-specific Modified ChaCha cipher.
  *
@@ -26,7 +29,8 @@ public final class ModifiedChaCha {
      * @param seed the seed used for round and block hash derivation
      * @return the decrypted plaintext
      */
-    public static byte[] decrypt(byte[] data, byte[] key, byte[] iv, long seed) {
+    @CheckReturnValue
+    public static byte @NotNull [] decrypt(byte @NotNull [] data, byte @NotNull [] key, byte @NotNull [] iv, long seed) {
         var keyIv = new byte[56];
         System.arraycopy(key, 0, keyIv, 0, 32);
         System.arraycopy(iv, 0, keyIv, 32, 24);
@@ -62,7 +66,8 @@ public final class ModifiedChaCha {
      * @param seed the seed used for round and block hash derivation
      * @return the encrypted ciphertext
      */
-    public static byte[] encrypt(byte[] data, byte[] key, byte[] iv, long seed) {
+    @CheckReturnValue
+    public static byte @NotNull [] encrypt(byte @NotNull [] data, byte @NotNull [] key, byte @NotNull [] iv, long seed) {
         var keyIv = new byte[56];
         System.arraycopy(key, 0, keyIv, 0, 32);
         System.arraycopy(iv, 0, keyIv, 32, 24);

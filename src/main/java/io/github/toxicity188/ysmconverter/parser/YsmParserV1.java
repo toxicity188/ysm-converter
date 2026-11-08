@@ -1,6 +1,8 @@
 package io.github.toxicity188.ysmconverter.parser;
 
 import io.github.toxicity188.ysmconverter.crypto.AesCipher;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.UnmodifiableView;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -10,6 +12,7 @@ import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.zip.Inflater;
 import java.util.zip.InflaterOutputStream;
 
@@ -26,16 +29,16 @@ import java.util.zip.InflaterOutputStream;
  */
 public final class YsmParserV1 implements YsmParser {
 
-    private final byte[] buffer;
-    private final Map<String, byte[]> resources = new LinkedHashMap<>();
+    private final byte @NotNull [] buffer;
+    private final @NotNull Map<@NotNull String, byte @NotNull []> resources = new LinkedHashMap<>();
 
     /**
      * Constructs a parser for legacy YSM V1 model bytes.
      *
      * @param buffer raw .ysm file data
      */
-    public YsmParserV1(byte[] buffer) {
-        this.buffer = buffer;
+    public YsmParserV1(byte @NotNull [] buffer) {
+        this.buffer = Objects.requireNonNull(buffer, "buffer must not be null");
     }
 
     @Override
@@ -44,8 +47,13 @@ public final class YsmParserV1 implements YsmParser {
     }
 
     @Override
+    public int getFormatVersion() {
+        return 1;
+    }
+
+    @Override
     public void parse() throws IOException {
-        if (buffer == null || buffer.length < 24) {
+        if (buffer.length < 24) {
             return;
         }
 
@@ -59,7 +67,7 @@ public final class YsmParserV1 implements YsmParser {
                     | (buffer[offset + 3] & 0xFF);
             offset += 4;
 
-            var fileName = new String(buffer, offset, strSize, StandardCharsets.UTF_8);
+            String fileName = new String(buffer, offset, strSize, StandardCharsets.UTF_8);
             offset += strSize;
 
             int dataLen = ((buffer[offset] & 0xFF) << 24)
@@ -68,20 +76,26 @@ public final class YsmParserV1 implements YsmParser {
                     | (buffer[offset + 3] & 0xFF);
             offset += 4;
 
-            var aesKey = new byte[16];
-            System.arraycopy(buffer, offset, aesKey, 0, 16);
+            int keyLen = ((buffer[offset] & 0xFF) << 24)
+                    | ((buffer[offset + 1] & 0xFF) << 16)
+                    | ((buffer[offset + 2] & 0xFF) << 8)
+                    | (buffer[offset + 3] & 0xFF);
+            offset += 4;
+
+            byte[] key = new byte[keyLen];
+            System.arraycopy(buffer, offset, key, 0, keyLen);
+            offset += keyLen;
+
+            byte[] iv = new byte[16];
+            System.arraycopy(buffer, offset, iv, 0, 16);
             offset += 16;
 
-            var ivBytes = new byte[16];
-            System.arraycopy(buffer, offset, ivBytes, 0, 16);
-            offset += 16;
-
-            var encryptedData = new byte[dataLen];
+            byte[] encryptedData = new byte[dataLen];
             System.arraycopy(buffer, offset, encryptedData, 0, dataLen);
             offset += dataLen;
 
             try {
-                byte[] decrypted = AesCipher.decryptCbc(aesKey, ivBytes, encryptedData);
+                byte[] decrypted = AesCipher.decryptCbc(key, iv, encryptedData);
                 byte[] decompressed = zlibDecompress(decrypted);
                 resources.put(fileName, decompressed);
             } catch (GeneralSecurityException e) {
@@ -91,12 +105,13 @@ public final class YsmParserV1 implements YsmParser {
     }
 
     @Override
-    public byte[] getDecryptedData() {
+    public byte @NotNull [] getDecryptedData() {
         return new byte[0];
     }
 
     @Override
-    public void saveToDirectory(Path outputDirectory) throws IOException {
+    public void saveToDirectory(@NotNull Path outputDirectory) throws IOException {
+        Objects.requireNonNull(outputDirectory, "outputDirectory must not be null");
         for (var entry : resources.entrySet()) {
             Path targetFile = PathSanitizer.safeResolve(outputDirectory, entry.getKey());
             PathSanitizer.writeSafe(targetFile, entry.getValue());
@@ -104,7 +119,7 @@ public final class YsmParserV1 implements YsmParser {
     }
 
     @Override
-    public Map<String, byte[]> getExtractedResources() {
+    public @NotNull @UnmodifiableView Map<@NotNull String, byte @NotNull []> getExtractedResources() {
         return Collections.unmodifiableMap(resources);
     }
 

@@ -1,5 +1,8 @@
 package io.github.toxicity188.ysmconverter.compression;
 
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
+
 import java.util.Arrays;
 
 /**
@@ -50,7 +53,8 @@ public final class YsmZstd {
      * @return standard ZSTD byte array ready for standard decompression
      * @throws IllegalArgumentException if the data is invalid or not recognized
      */
-    public static byte[] wash(byte[] compressedData) {
+    @CheckReturnValue
+    public static byte @NotNull [] wash(byte @NotNull [] compressedData) {
         if (compressedData == null || compressedData.length < 5) {
             throw new IllegalArgumentException("Invalid data length for ZSTD wash");
         }
@@ -112,7 +116,8 @@ public final class YsmZstd {
      * @return YSM-modified ZSTD byte array
      * @throws IllegalArgumentException if the data is invalid
      */
-    public static byte[] obfuscate(byte[] standardData) {
+    @CheckReturnValue
+    public static byte @NotNull [] obfuscate(byte @NotNull [] standardData) {
         if (standardData == null || standardData.length < 5) {
             throw new IllegalArgumentException("Invalid data length for ZSTD obfuscate");
         }

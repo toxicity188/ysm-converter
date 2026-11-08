@@ -1,5 +1,9 @@
 package io.github.toxicity188.ysmconverter.parser;
 
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,7 +27,8 @@ public final class PathSanitizer {
      * @param filename filename string
      * @return sanitized filename safe for filesystem operations
      */
-    public static String sanitizeWindowsFilename(String filename) {
+    @CheckReturnValue
+    public static @NotNull String sanitizeWindowsFilename(@Nullable String filename) {
         if (filename == null || filename.isEmpty()) {
             return "unnamed_file";
         }
@@ -57,7 +62,8 @@ public final class PathSanitizer {
      * @return normalized target path
      * @throws SecurityException if the resolved path attempts to escape the root directory
      */
-    public static Path safeResolve(Path rootDir, String relativePath) {
+    @CheckReturnValue
+    public static @NotNull Path safeResolve(@NotNull Path rootDir, @NotNull String relativePath) {
         Path resolved = rootDir.resolve(relativePath).normalize();
         if (!resolved.startsWith(rootDir.normalize())) {
             throw new SecurityException("Path traversal attempt detected: " + relativePath);
@@ -72,7 +78,7 @@ public final class PathSanitizer {
      * @param data       bytes to write
      * @throws IOException if writing fails
      */
-    public static void writeSafe(Path targetPath, byte[] data) throws IOException {
+    public static void writeSafe(@NotNull Path targetPath, byte @NotNull [] data) throws IOException {
         Path parent = targetPath.getParent();
         if (parent != null && !Files.exists(parent)) {
             Files.createDirectories(parent);

@@ -1,6 +1,8 @@
 package io.github.toxicity188.ysmconverter.parser;
 
 import io.github.toxicity188.ysmconverter.crypto.AesCipher;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.UnmodifiableView;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -13,6 +15,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.zip.Inflater;
 import java.util.zip.InflaterOutputStream;
@@ -30,16 +33,16 @@ import java.util.zip.InflaterOutputStream;
  */
 public final class YsmParserV2 implements YsmParser {
 
-    private final byte[] buffer;
-    private final Map<String, byte[]> resources = new LinkedHashMap<>();
+    private final byte @NotNull [] buffer;
+    private final @NotNull Map<@NotNull String, byte @NotNull []> resources = new LinkedHashMap<>();
 
     /**
      * Constructs a parser for legacy YSM V2 model bytes.
      *
      * @param buffer raw .ysm file data
      */
-    public YsmParserV2(byte[] buffer) {
-        this.buffer = buffer;
+    public YsmParserV2(byte @NotNull [] buffer) {
+        this.buffer = Objects.requireNonNull(buffer, "buffer must not be null");
     }
 
     @Override
@@ -48,9 +51,19 @@ public final class YsmParserV2 implements YsmParser {
     }
 
     @Override
+    public int getFormatVersion() {
+        return 2;
+    }
+
+    @Override
     public void parse() throws IOException {
-        if (buffer == null || buffer.length < 24) {
+        if (buffer.length < 24) {
             return;
+        }
+
+        int magic = ((buffer[0] & 0xFF)) | ((buffer[1] & 0xFF) << 8) | ((buffer[2] & 0xFF) << 16) | ((buffer[3] & 0xFF) << 24);
+        if (magic != 0x50475359) {
+            throw new IllegalArgumentException("Invalid YSM V2 magic bytes");
         }
 
         int offset = 8; // Skip Magic and Version
@@ -60,7 +73,7 @@ public final class YsmParserV2 implements YsmParser {
         try {
             md5 = MessageDigest.getInstance("MD5");
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("MD5 not available", e);
+            throw new RuntimeException("MD5 not available", e);
         }
 
         while (offset < buffer.length) {
@@ -70,9 +83,9 @@ public final class YsmParserV2 implements YsmParser {
                     | (buffer[offset + 3] & 0xFF);
             offset += 4;
 
-            var b64 = new String(buffer, offset, strSize, StandardCharsets.UTF_8);
+            String base64Name = new String(buffer, offset, strSize, StandardCharsets.UTF_8);
             offset += strSize;
-            var fileName = new String(Base64.getDecoder().decode(b64), StandardCharsets.UTF_8);
+            String fileName = new String(Base64.getDecoder().decode(base64Name), StandardCharsets.UTF_8);
 
             int dataLen = ((buffer[offset] & 0xFF) << 24)
                     | ((buffer[offset + 1] & 0xFF) << 16)
@@ -80,24 +93,21 @@ public final class YsmParserV2 implements YsmParser {
                     | (buffer[offset + 3] & 0xFF);
             offset += 4;
 
-            int encryptedKeyLen = ((buffer[offset] & 0xFF) << 24)
+            int encKeyLen = ((buffer[offset] & 0xFF) << 24)
                     | ((buffer[offset + 1] & 0xFF) << 16)
                     | ((buffer[offset + 2] & 0xFF) << 8)
                     | (buffer[offset + 3] & 0xFF);
             offset += 4;
-            if (encryptedKeyLen != 32) {
-                throw new IllegalArgumentException("Invalid encrypted key length: " + encryptedKeyLen);
-            }
 
-            var encryptedKey = new byte[32];
-            System.arraycopy(buffer, offset, encryptedKey, 0, 32);
-            offset += 32;
+            byte[] encryptedKey = new byte[encKeyLen];
+            System.arraycopy(buffer, offset, encryptedKey, 0, encKeyLen);
+            offset += encKeyLen;
 
-            var ivBytes = new byte[16];
+            byte[] ivBytes = new byte[16];
             System.arraycopy(buffer, offset, ivBytes, 0, 16);
             offset += 16;
 
-            var encryptedData = new byte[dataLen];
+            byte[] encryptedData = new byte[dataLen];
             System.arraycopy(buffer, offset, encryptedData, 0, dataLen);
             offset += dataLen;
 
@@ -123,12 +133,13 @@ public final class YsmParserV2 implements YsmParser {
     }
 
     @Override
-    public byte[] getDecryptedData() {
+    public byte @NotNull [] getDecryptedData() {
         return new byte[0];
     }
 
     @Override
-    public void saveToDirectory(Path outputDirectory) throws IOException {
+    public void saveToDirectory(@NotNull Path outputDirectory) throws IOException {
+        Objects.requireNonNull(outputDirectory, "outputDirectory must not be null");
         for (var entry : resources.entrySet()) {
             Path targetFile = PathSanitizer.safeResolve(outputDirectory, entry.getKey());
             PathSanitizer.writeSafe(targetFile, entry.getValue());
@@ -136,7 +147,7 @@ public final class YsmParserV2 implements YsmParser {
     }
 
     @Override
-    public Map<String, byte[]> getExtractedResources() {
+    public @NotNull @UnmodifiableView Map<@NotNull String, byte @NotNull []> getExtractedResources() {
         return Collections.unmodifiableMap(resources);
     }
 

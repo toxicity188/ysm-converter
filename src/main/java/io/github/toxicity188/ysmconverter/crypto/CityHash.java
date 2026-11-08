@@ -1,5 +1,8 @@
 package io.github.toxicity188.ysmconverter.crypto;
 
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Pure Java implementation of YSM-modified CityHash64.
  *
@@ -32,7 +35,8 @@ public final class CityHash {
      * @param seed   the 64-bit seed
      * @return the 64-bit hash
      */
-    public static long cityHash64WithSeed(byte[] s, int offset, int len, long seed) {
+    @CheckReturnValue
+    public static long cityHash64WithSeed(byte @NotNull [] s, int offset, int len, long seed) {
         return cityHash64WithSeeds(s, offset, len, K2, seed);
     }
 
@@ -46,7 +50,8 @@ public final class CityHash {
      * @param seed1  second seed
      * @return the 64-bit hash
      */
-    public static long cityHash64WithSeeds(byte[] s, int offset, int len, long seed0, long seed1) {
+    @CheckReturnValue
+    public static long cityHash64WithSeeds(byte @NotNull [] s, int offset, int len, long seed0, long seed1) {
         return hashLen16(cityHash64(s, offset, len) - seed0, seed1);
     }
 
@@ -58,7 +63,8 @@ public final class CityHash {
      * @param len    the length of bytes to hash
      * @return the 64-bit hash
      */
-    public static long cityHash64(byte[] s, int offset, int len) {
+    @CheckReturnValue
+    public static long cityHash64(byte @NotNull [] s, int offset, int len) {
         if (len <= 32) {
             if (len <= 16) {
                 return hashLen0to16(s, offset, len);

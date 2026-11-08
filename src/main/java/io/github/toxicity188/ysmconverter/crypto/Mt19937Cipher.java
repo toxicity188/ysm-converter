@@ -1,5 +1,8 @@
 package io.github.toxicity188.ysmconverter.crypto;
 
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Implements MT19937-64 based XOR keystream encryption and decryption.
  *
@@ -22,7 +25,8 @@ public final class Mt19937Cipher {
      * @param iv   the 24-byte IV
      * @return the transformed data bytes
      */
-    public static byte[] decrypt(byte[] data, byte[] key, byte[] iv) {
+    @CheckReturnValue
+    public static byte @NotNull [] decrypt(byte @NotNull [] data, byte @NotNull [] key, byte @NotNull [] iv) {
         var keyIv = new byte[56];
         System.arraycopy(key, 0, keyIv, 0, 32);
         System.arraycopy(iv, 0, keyIv, 32, 24);

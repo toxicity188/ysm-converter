@@ -1,5 +1,8 @@
 package io.github.toxicity188.ysmconverter.crypto;
 
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
+
 import java.security.GeneralSecurityException;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
@@ -28,7 +31,8 @@ public final class AesCipher {
      * @return the decrypted plaintext
      * @throws GeneralSecurityException if decryption fails
      */
-    public static byte[] decryptCbc(byte[] key, byte[] iv, byte[] data) throws GeneralSecurityException {
+    @CheckReturnValue
+    public static byte @NotNull [] decryptCbc(byte @NotNull [] key, byte @NotNull [] iv, byte @NotNull [] data) throws GeneralSecurityException {
         var keySpec = new SecretKeySpec(key, 0, 16, "AES");
         var ivSpec = new IvParameterSpec(iv, 0, 16);
         var cipher = Cipher.getInstance("AES/CBC/NoPadding");

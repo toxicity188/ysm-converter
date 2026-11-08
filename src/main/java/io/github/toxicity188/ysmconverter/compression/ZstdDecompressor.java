@@ -1,6 +1,8 @@
 package io.github.toxicity188.ysmconverter.compression;
 
 import com.github.luben.zstd.ZstdInputStream;
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -27,7 +29,8 @@ public final class ZstdDecompressor {
      * @return the decompressed uncompressed byte array
      * @throws IOException if decompression fails
      */
-    public static byte[] decompress(byte[] compressedData) throws IOException {
+    @CheckReturnValue
+    public static byte @NotNull [] decompress(byte @NotNull [] compressedData) throws IOException {
         byte[] washed = YsmZstd.wash(compressedData);
         try (var in = new ZstdInputStream(new ByteArrayInputStream(washed));
              var out = new ByteArrayOutputStream()) {

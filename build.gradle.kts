@@ -19,7 +19,8 @@ repositories {
 }
 
 dependencies {
-    implementation("org.jetbrains:annotations:26.1.0")
+    compileOnly("org.jetbrains:annotations:26.1.0")
+    testCompileOnly("org.jetbrains:annotations:26.1.0")
 
     implementation("com.github.luben:zstd-jni:1.5.7-25")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.22.4")

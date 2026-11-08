@@ -1,5 +1,7 @@
 package io.github.toxicity188.ysmconverter.crypto;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Pure Java implementation of XChaCha20 cipher with YSM dynamic rounds and state updates.
  *
@@ -40,7 +42,7 @@ public final class XChaCha20 {
      * @param key 32-byte key
      * @param iv  24-byte IV
      */
-    public void keySetup(byte[] key, byte[] iv) {
+    public void keySetup(byte @NotNull [] key, byte @NotNull [] iv) {
         var k2 = new byte[32];
         hChaCha20(k2, iv, key, rounds);
 
@@ -71,7 +73,7 @@ public final class XChaCha20 {
      * @param outOffset output offset
      * @param bytes     number of bytes to process
      */
-    public void cryptBytes(byte[] in, int inOffset, byte[] out, int outOffset, int bytes) {
+    public void cryptBytes(byte @NotNull [] in, int inOffset, byte @NotNull [] out, int outOffset, int bytes) {
         if (bytes <= 0) {
             return;
         }

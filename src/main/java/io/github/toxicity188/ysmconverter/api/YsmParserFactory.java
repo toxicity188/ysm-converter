@@ -6,6 +6,8 @@ import io.github.toxicity188.ysmconverter.parser.YsmParser;
 import io.github.toxicity188.ysmconverter.parser.YsmParserV1;
 import io.github.toxicity188.ysmconverter.parser.YsmParserV2;
 import io.github.toxicity188.ysmconverter.parser.YsmParserV3;
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -36,7 +38,8 @@ public final class YsmParserFactory {
      * @throws IOException if reading the file fails
      * @throws IllegalArgumentException if file data is malformed or unsupported
      */
-    public static YsmParser create(Path path) throws IOException {
+    @CheckReturnValue
+    public static @NotNull YsmParser create(@NotNull Path path) throws IOException {
         Objects.requireNonNull(path, "path must not be null");
         var data = Files.readAllBytes(path);
         return create(data);
@@ -49,7 +52,8 @@ public final class YsmParserFactory {
      * @return parser instance for the detected version
      * @throws IllegalArgumentException if data is null, malformed, or unsupported
      */
-    public static YsmParser create(byte[] data) {
+    @CheckReturnValue
+    public static @NotNull YsmParser create(byte @NotNull [] data) {
         Objects.requireNonNull(data, "data must not be null");
         var version = VersionDetector.detectVersion(data);
         return create(version, data);
@@ -62,7 +66,8 @@ public final class YsmParserFactory {
      * @param data    binary content of .ysm file
      * @return parser instance
      */
-    public static YsmParser create(YsmVersion version, byte[] data) {
+    @CheckReturnValue
+    public static @NotNull YsmParser create(@NotNull YsmVersion version, byte @NotNull [] data) {
         Objects.requireNonNull(version, "version must not be null");
         Objects.requireNonNull(data, "data must not be null");
         return switch (version) {

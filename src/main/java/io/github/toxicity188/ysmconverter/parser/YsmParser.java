@@ -3,6 +3,10 @@ package io.github.toxicity188.ysmconverter.parser;
 import io.github.toxicity188.ysmconverter.api.YsmConverter;
 import io.github.toxicity188.ysmconverter.api.YsmParseResult;
 import io.github.toxicity188.ysmconverter.api.YsmParserFactory;
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Unmodifiable;
+import org.jetbrains.annotations.UnmodifiableView;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -28,7 +32,8 @@ public interface YsmParser {
      * @return parser instance for the detected version
      * @throws IOException if reading the file fails
      */
-    static YsmParser of(Path path) throws IOException {
+    @CheckReturnValue
+    static @NotNull YsmParser of(@NotNull Path path) throws IOException {
         return YsmParserFactory.create(path);
     }
 
@@ -38,7 +43,8 @@ public interface YsmParser {
      * @param data binary content of .ysm file
      * @return parser instance for the detected version
      */
-    static YsmParser of(byte[] data) {
+    @CheckReturnValue
+    static @NotNull YsmParser of(byte @NotNull [] data) {
         return YsmParserFactory.create(data);
     }
 
@@ -50,7 +56,8 @@ public interface YsmParser {
      * @return parsing result summary
      * @throws IOException if parsing or extraction fails
      */
-    static YsmParseResult parse(Path ysmFilePath, Path outputDir) throws IOException {
+    @CheckReturnValue
+    static @NotNull YsmParseResult parse(@NotNull Path ysmFilePath, @NotNull Path outputDir) throws IOException {
         return YsmConverter.parse(ysmFilePath, outputDir);
     }
 
@@ -62,7 +69,8 @@ public interface YsmParser {
      * @return parsing result summary
      * @throws IOException if parsing or extraction fails
      */
-    static YsmParseResult parse(byte[] ysmBytes, Path outputDir) throws IOException {
+    @CheckReturnValue
+    static @NotNull YsmParseResult parse(byte @NotNull [] ysmBytes, @NotNull Path outputDir) throws IOException {
         return YsmConverter.parse(ysmBytes, outputDir);
     }
 
@@ -87,7 +95,7 @@ public interface YsmParser {
      *
      * @return unmodifiable list of warning messages
      */
-    default List<String> getWarnings() {
+    default @NotNull @Unmodifiable List<@NotNull String> getWarnings() {
         return List.of();
     }
 
@@ -103,7 +111,7 @@ public interface YsmParser {
      *
      * @return decrypted byte array
      */
-    byte[] getDecryptedData();
+    byte @NotNull [] getDecryptedData();
 
     /**
      * Saves all recovered model resources into the specified output directory.
@@ -111,12 +119,12 @@ public interface YsmParser {
      * @param outputDirectory directory where files will be created
      * @throws IOException if file creation or writing fails
      */
-    void saveToDirectory(Path outputDirectory) throws IOException;
+    void saveToDirectory(@NotNull Path outputDirectory) throws IOException;
 
     /**
      * Gets a map of all recovered resource relative paths to their binary contents.
      *
-     * @return unmodifiable map of relative path to resource bytes
+     * @return unmodifiable view or snapshot map of relative path to resource bytes
      */
-    Map<String, byte[]> getExtractedResources();
+    @NotNull @UnmodifiableView Map<@NotNull String, byte @NotNull []> getExtractedResources();
 }

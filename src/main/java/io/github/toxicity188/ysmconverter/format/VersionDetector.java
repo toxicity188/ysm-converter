@@ -1,5 +1,8 @@
 package io.github.toxicity188.ysmconverter.format;
 
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
+
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -26,7 +29,8 @@ public final class VersionDetector {
      * @throws IllegalArgumentException if data is malformed or smaller than 8 bytes
      * @throws UnsupportedOperationException if version is unsupported
      */
-    public static YsmVersion detectVersion(byte[] data) {
+    @CheckReturnValue
+    public static @NotNull YsmVersion detectVersion(byte @NotNull [] data) {
         if (data == null || data.length < 8) {
             throw new IllegalArgumentException("Invalid YSM file format: size must be at least 8 bytes");
         }
@@ -58,7 +62,8 @@ public final class VersionDetector {
      * @return the parsed format number (e.g. 1, 4, 15, 26, 32)
      * @throws IllegalArgumentException if format tag is missing or invalid
      */
-    public static int extractV3Format(String headerText) {
+    @CheckReturnValue
+    public static int extractV3Format(@NotNull String headerText) {
         int pos = headerText.indexOf("<format>");
         if (pos == -1) {
             throw new IllegalArgumentException("No <format> tag in header");

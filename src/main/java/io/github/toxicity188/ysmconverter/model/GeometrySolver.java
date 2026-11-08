@@ -2,6 +2,8 @@ package io.github.toxicity188.ysmconverter.model;
 
 import io.github.toxicity188.ysmconverter.binary.Vector3D;
 import io.github.toxicity188.ysmconverter.model.GeometryTypes.*;
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 
@@ -35,6 +37,7 @@ public final class GeometrySolver {
      * @param v float value
      * @return cleaned float
      */
+    @CheckReturnValue
     public static float cleanNumber(float v) {
         if (Math.abs(v) < 1e-9f) {
             return 0.0f;
@@ -48,7 +51,8 @@ public final class GeometrySolver {
      * @param v vector
      * @return cleaned vector
      */
-    public static Vector3D cleanVector(Vector3D v) {
+    @CheckReturnValue
+    public static @NotNull Vector3D cleanVector(@NotNull Vector3D v) {
         return new Vector3D(cleanNumber(v.x()), cleanNumber(v.y()), cleanNumber(v.z()));
     }
 
@@ -91,8 +95,9 @@ public final class GeometrySolver {
      * @param textureHeight   texture height in pixels
      * @return the reconstructed cube
      */
-    public static BlockbenchCube restoreBlockbenchCube(
-            List<Face> facesData,
+    @CheckReturnValue
+    public static @NotNull BlockbenchCube restoreBlockbenchCube(
+            @NotNull List<@NotNull Face> facesData,
             float originalInflate,
             int textureWidth,
             int textureHeight

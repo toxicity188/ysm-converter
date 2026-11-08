@@ -1,5 +1,8 @@
 package io.github.toxicity188.ysmconverter.parser;
 
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
+
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -28,7 +31,8 @@ public final class ImageEncoder {
      * @return PNG encoded byte array
      * @throws IOException if encoding fails or dimensions mismatch
      */
-    public static byte[] encodeRgbaToPng(byte[] rgbaData, int width, int height) throws IOException {
+    @CheckReturnValue
+    public static byte @NotNull [] encodeRgbaToPng(byte @NotNull [] rgbaData, int width, int height) throws IOException {
         if (rgbaData == null || rgbaData.length != width * height * 4) {
             throw new IllegalArgumentException("Invalid RGBA buffer length: expected " + (width * height * 4)
                     + " bytes, got " + (rgbaData == null ? 0 : rgbaData.length));

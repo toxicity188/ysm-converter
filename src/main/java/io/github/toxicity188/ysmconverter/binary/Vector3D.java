@@ -1,5 +1,9 @@
 package io.github.toxicity188.ysmconverter.binary;
 
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Immutable 3D vector representing coordinates, rotation, or scale.
  *
@@ -18,7 +22,7 @@ public record Vector3D(float x, float y, float z) {
     /**
      * Zero vector constant (0, 0, 0).
      */
-    public static final Vector3D ZERO = new Vector3D(0.0f, 0.0f, 0.0f);
+    public static final @NotNull Vector3D ZERO = new Vector3D(0.0f, 0.0f, 0.0f);
 
     /**
      * Adds another vector to this vector.
@@ -26,7 +30,9 @@ public record Vector3D(float x, float y, float z) {
      * @param o vector to add
      * @return sum vector
      */
-    public Vector3D add(Vector3D o) {
+    @Contract(pure = true)
+    @CheckReturnValue
+    public @NotNull Vector3D add(@NotNull Vector3D o) {
         return new Vector3D(x + o.x, y + o.y, z + o.z);
     }
 
@@ -36,7 +42,9 @@ public record Vector3D(float x, float y, float z) {
      * @param o vector to subtract
      * @return difference vector
      */
-    public Vector3D subtract(Vector3D o) {
+    @Contract(pure = true)
+    @CheckReturnValue
+    public @NotNull Vector3D subtract(@NotNull Vector3D o) {
         return new Vector3D(x - o.x, y - o.y, z - o.z);
     }
 
@@ -46,7 +54,9 @@ public record Vector3D(float x, float y, float z) {
      * @param s scalar value
      * @return scaled vector
      */
-    public Vector3D multiply(float s) {
+    @Contract(pure = true)
+    @CheckReturnValue
+    public @NotNull Vector3D multiply(float s) {
         return new Vector3D(x * s, y * s, z * s);
     }
 
@@ -56,7 +66,9 @@ public record Vector3D(float x, float y, float z) {
      * @param o vector to multiply
      * @return resulting vector
      */
-    public Vector3D multiply(Vector3D o) {
+    @Contract(pure = true)
+    @CheckReturnValue
+    public @NotNull Vector3D multiply(@NotNull Vector3D o) {
         return new Vector3D(x * o.x, y * o.y, z * o.z);
     }
 
@@ -66,7 +78,9 @@ public record Vector3D(float x, float y, float z) {
      * @param s scalar value
      * @return divided vector
      */
-    public Vector3D divide(float s) {
+    @Contract(pure = true)
+    @CheckReturnValue
+    public @NotNull Vector3D divide(float s) {
         return new Vector3D(x / s, y / s, z / s);
     }
 
@@ -76,7 +90,9 @@ public record Vector3D(float x, float y, float z) {
      * @param o other vector
      * @return dot product
      */
-    public float dot(Vector3D o) {
+    @Contract(pure = true)
+    @CheckReturnValue
+    public float dot(@NotNull Vector3D o) {
         return x * o.x + y * o.y + z * o.z;
     }
 
@@ -86,7 +102,9 @@ public record Vector3D(float x, float y, float z) {
      * @param o other vector
      * @return cross product vector
      */
-    public Vector3D cross(Vector3D o) {
+    @Contract(pure = true)
+    @CheckReturnValue
+    public @NotNull Vector3D cross(@NotNull Vector3D o) {
         return new Vector3D(
                 y * o.z - z * o.y,
                 z * o.x - x * o.z,
@@ -99,6 +117,8 @@ public record Vector3D(float x, float y, float z) {
      *
      * @return vector length
      */
+    @Contract(pure = true)
+    @CheckReturnValue
     public float length() {
         return (float) Math.sqrt(dot(this));
     }
@@ -108,7 +128,9 @@ public record Vector3D(float x, float y, float z) {
      *
      * @return normalized vector
      */
-    public Vector3D normalize() {
+    @Contract(pure = true)
+    @CheckReturnValue
+    public @NotNull Vector3D normalize() {
         float l = length();
         return l > 1e-8f ? divide(l) : ZERO;
     }
@@ -118,7 +140,9 @@ public record Vector3D(float x, float y, float z) {
      *
      * @return rounded vector
      */
-    public Vector3D round() {
+    @Contract(pure = true)
+    @CheckReturnValue
+    public @NotNull Vector3D round() {
         return new Vector3D(Math.round(x), Math.round(y), Math.round(z));
     }
 }

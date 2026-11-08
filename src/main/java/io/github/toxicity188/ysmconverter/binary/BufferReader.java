@@ -1,7 +1,11 @@
 package io.github.toxicity188.ysmconverter.binary;
 
+import org.jetbrains.annotations.CheckReturnValue;
+import org.jetbrains.annotations.NotNull;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * Binary buffer reader providing primitive, varint, float, string, and vector deserialization
@@ -16,7 +20,7 @@ import java.util.Arrays;
  */
 public final class BufferReader {
 
-    private final byte[] data;
+    private final byte @NotNull [] data;
     private int offset;
 
     /**
@@ -24,7 +28,7 @@ public final class BufferReader {
      *
      * @param data binary data buffer
      */
-    public BufferReader(byte[] data) {
+    public BufferReader(byte @NotNull [] data) {
         this(data, 0);
     }
 
@@ -34,8 +38,8 @@ public final class BufferReader {
      * @param data   binary data buffer
      * @param offset initial byte offset
      */
-    public BufferReader(byte[] data, int offset) {
-        this.data = data;
+    public BufferReader(byte @NotNull [] data, int offset) {
+        this.data = Objects.requireNonNull(data, "data must not be null");
         this.offset = offset;
     }
 
@@ -44,6 +48,7 @@ public final class BufferReader {
      *
      * @return offset
      */
+    @CheckReturnValue
     public int getOffset() {
         return offset;
     }
@@ -62,6 +67,7 @@ public final class BufferReader {
      *
      * @return buffer length
      */
+    @CheckReturnValue
     public int getSize() {
         return data.length;
     }
@@ -71,6 +77,7 @@ public final class BufferReader {
      *
      * @return true if EOF
      */
+    @CheckReturnValue
     public boolean isEOF() {
         return offset >= data.length;
     }
@@ -81,6 +88,7 @@ public final class BufferReader {
      * @return unsigned byte value (0-255)
      * @throws IndexOutOfBoundsException if at or past end of buffer
      */
+    @CheckReturnValue
     public int seeByte() {
         if (offset >= data.length) {
             throw new IndexOutOfBoundsException("Buffer EOF at offset " + offset);
@@ -156,7 +164,7 @@ public final class BufferReader {
      *
      * @return vector
      */
-    public Vector3D readVector3D() {
+    public @NotNull Vector3D readVector3D() {
         float x = readFloat();
         float y = readFloat();
         float z = readFloat();
@@ -186,7 +194,7 @@ public final class BufferReader {
      *
      * @return decoded string
      */
-    public String readString() {
+    public @NotNull String readString() {
         int len = (int) readVarint();
         if (len == 0) {
             return "";
@@ -204,7 +212,7 @@ public final class BufferReader {
      *
      * @return copied byte array
      */
-    public byte[] readByteSequence() {
+    public byte @NotNull [] readByteSequence() {
         int len = (int) readVarint();
         if (len == 0) {
             return new byte[0];
@@ -218,7 +226,7 @@ public final class BufferReader {
      * @param len number of bytes to read
      * @return copied byte array
      */
-    public byte[] readBytesExactly(int len) {
+    public byte @NotNull [] readBytesExactly(int len) {
         if (offset + len > data.length) {
             throw new IndexOutOfBoundsException("Buffer EOF: requested " + len + " bytes at offset " + offset);
         }
