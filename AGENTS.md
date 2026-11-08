@@ -13,6 +13,16 @@ Scope: the entire repository unless a more specific `AGENTS.md` overrides it.
 - Implement the required functionality independently in Java 21.
 - Preserve behavioral compatibility with the original implementation.
 
+## Test Model Repository
+
+- `external/Yes-Steve-Model-Repo` contains third-party YSM models used for compatibility testing.
+- Treat this directory as read-only test data.
+- Do not modify or redistribute the original model assets.
+- Do not include converted models in commits or release artifacts without appropriate permission.
+- Test multiple YSM format versions and report conversion failures.
+- Keep unit tests independent of this external repository.
+- Use the external repository only for optional integration and compatibility tests.
+
 ## 1. Language and Compatibility
 
 ### MUST

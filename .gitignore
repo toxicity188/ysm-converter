@@ -34,3 +34,7 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Ysm Model Repo ### (https://github.com/Elaina69/Yes-Steve-Model-Repo)
+/external/Yes-Steve-Model-Repo/
+
