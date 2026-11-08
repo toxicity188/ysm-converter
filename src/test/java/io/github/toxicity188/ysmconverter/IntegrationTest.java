@@ -1,13 +1,13 @@
 package io.github.toxicity188.ysmconverter;
 
-import com.fasterxml.jackson.core.json.JsonReadFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import com.google.gson.*;
+import com.google.gson.stream.JsonReader;
 import io.github.toxicity188.ysmconverter.api.YsmConverter;
 import io.github.toxicity188.ysmconverter.api.YsmParseResult;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -22,12 +22,10 @@ class IntegrationTest {
             (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
     };
 
-    private final ObjectMapper mapper = new ObjectMapper()
-            .enable(SerializationFeature.INDENT_OUTPUT)
-            .enable(JsonReadFeature.ALLOW_JAVA_COMMENTS.mappedFeature())
-            .enable(JsonReadFeature.ALLOW_TRAILING_COMMA.mappedFeature())
-            .enable(JsonReadFeature.ALLOW_SINGLE_QUOTES.mappedFeature())
-            .enable(JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES.mappedFeature());
+    private final Gson gson = new GsonBuilder()
+            .setPrettyPrinting()
+            .disableHtmlEscaping()
+            .create();
 
     record ModelReport(
             String name,
@@ -116,8 +114,14 @@ class IntegrationTest {
                     String fileName = extractedPath.getFileName().toString().toLowerCase(Locale.ROOT);
                     if (fileName.endsWith(".json")) {
                         // Semantic JSON validation
-                        assertDoesNotThrow(() -> mapper.readTree(extractedPath.toFile()),
-                                "Extracted JSON must be well-formed: " + extractedPath);
+                        assertDoesNotThrow(() -> {
+                            try (var reader = Files.newBufferedReader(extractedPath, StandardCharsets.UTF_8)) {
+                                var jsonReader = new JsonReader(reader);
+                                jsonReader.setStrictness(Strictness.LENIENT);
+                                JsonElement parsed = JsonParser.parseReader(jsonReader);
+                                assertNotNull(parsed);
+                            }
+                        }, "Extracted JSON must be well-formed: " + extractedPath);
                     } else if (fileName.endsWith(".png")) {
                         // PNG magic validation
                         byte[] sig = new byte[8];
@@ -178,7 +182,9 @@ class IntegrationTest {
         );
 
         Path reportJsonPath = reportsDir.resolve("parsing-report.json");
-        mapper.writeValue(reportJsonPath.toFile(), overallReport);
+        try (var writer = Files.newBufferedWriter(reportJsonPath, StandardCharsets.UTF_8)) {
+            gson.toJson(overallReport, writer);
+        }
         System.out.println("Integration test complete. Report written to " + reportJsonPath);
 
         // Verification assertion

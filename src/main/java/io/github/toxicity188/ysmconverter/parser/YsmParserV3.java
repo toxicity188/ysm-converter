@@ -1,10 +1,11 @@
 package io.github.toxicity188.ysmconverter.parser;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.github.toxicity188.ysmconverter.binary.BufferReader;
 import io.github.toxicity188.ysmconverter.binary.Vector3D;
 import io.github.toxicity188.ysmconverter.compression.ZstdDecompressor;
@@ -40,8 +41,10 @@ import java.util.*;
  */
 public final class YsmParserV3 implements YsmParser {
 
+    private static final Gson GSON_COMPACT = new GsonBuilder().disableHtmlEscaping().create();
+    private static final Gson GSON_PRETTY = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
+
     private final byte @NotNull [] buffer;
-    private final @NotNull ObjectMapper mapper = new ObjectMapper();
 
     private int formatVersion;
     private byte @Nullable [] decryptedData;
@@ -79,11 +82,10 @@ public final class YsmParserV3 implements YsmParser {
      */
     public void setFormatJson(boolean formatJson) {
         this.formatJson = formatJson;
-        if (formatJson) {
-            mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        } else {
-            mapper.disable(SerializationFeature.INDENT_OUTPUT);
-        }
+    }
+
+    private Gson getGson() {
+        return formatJson ? GSON_PRETTY : GSON_COMPACT;
     }
 
     private final @NotNull List<@NotNull String> warnings = new ArrayList<>();
@@ -578,19 +580,19 @@ public final class YsmParserV3 implements YsmParser {
         }
     }
 
-    private void parseLanguageFiles(BufferReader reader) throws IOException {
+    private void parseLanguageFiles(BufferReader reader) {
         long cnt = reader.readVarint();
         for (long i = 0; i < cnt; i++) {
             String name = reader.readString();
             reader.readString(); // hash
-            ObjectNode nodesData = mapper.createObjectNode();
+            var nodesData = new JsonObject();
             long nodes = reader.readVarint();
             for (long j = 0; j < nodes; j++) {
                 String nodeName = reader.readString();
                 String nodeValue = reader.readString();
-                nodesData.put(nodeName, nodeValue);
+                nodesData.addProperty(nodeName, nodeValue);
             }
-            languageFiles.put(name, mapper.writeValueAsBytes(nodesData));
+            languageFiles.put(name, getGson().toJson(nodesData).getBytes(StandardCharsets.UTF_8));
         }
     }
 
@@ -681,16 +683,16 @@ public final class YsmParserV3 implements YsmParser {
         return new BonesKeyFrame(list);
     }
 
-    private JsonNode molangToJson(MolangTriple mp) {
+    private JsonElement molangToJson(MolangTriple mp) {
         if (mp.v0().equals(mp.v1()) && mp.v1().equals(mp.v2())) {
             if (mp.v0() instanceof Float f) {
-                return mapper.getNodeFactory().numberNode(Math.abs(f) < 1e-6f ? 0.0f : f);
+                return new JsonPrimitive(Math.abs(f) < 1e-6f ? 0.0f : f);
             } else if (mp.v0() instanceof String s) {
-                return mapper.getNodeFactory().textNode(s);
+                return new JsonPrimitive(s);
             }
         }
 
-        ArrayNode arr = mapper.createArrayNode();
+        var arr = new JsonArray();
         Object[] vals = {mp.v0(), mp.v1(), mp.v2()};
         for (Object arg : vals) {
             if (arg instanceof Float f) {
@@ -702,7 +704,7 @@ public final class YsmParserV3 implements YsmParser {
         return arr;
     }
 
-    private JsonNode channelToJson(BonesKeyFrame channel) {
+    private JsonElement channelToJson(BonesKeyFrame channel) {
         if (channel == null || channel.bone().isEmpty()) {
             return null;
         }
@@ -714,7 +716,7 @@ public final class YsmParserV3 implements YsmParser {
             return molangToJson(channel.bone().get(0).getValue().post());
         }
 
-        ObjectNode keyframes = mapper.createObjectNode();
+        var keyframes = new JsonObject();
         for (var entry : channel.bone()) {
             float time = entry.getKey();
             Keyframe kf = entry.getValue();
@@ -732,31 +734,31 @@ public final class YsmParserV3 implements YsmParser {
                 }
             }
 
-            JsonNode val;
+            JsonElement val;
             if (kf.pre() == null && kf.lerpMode() == 0) {
                 val = molangToJson(kf.post());
             } else {
-                ObjectNode kfData = mapper.createObjectNode();
-                kfData.set("post", molangToJson(kf.post()));
+                var kfData = new JsonObject();
+                kfData.add("post", molangToJson(kf.post()));
                 if (kf.pre() != null) {
-                    kfData.set("pre", molangToJson(kf.pre()));
+                    kfData.add("pre", molangToJson(kf.pre()));
                 }
                 if (kf.lerpMode() == 1) {
-                    kfData.put("lerp_mode", "step");
+                    kfData.addProperty("lerp_mode", "step");
                 } else if (kf.lerpMode() == 2) {
-                    kfData.put("lerp_mode", "catmullrom");
+                    kfData.addProperty("lerp_mode", "catmullrom");
                 }
                 val = kfData;
             }
-            keyframes.set(tStr, val);
+            keyframes.add(tStr, val);
         }
         return keyframes;
     }
 
-    private byte[] parseAnimations(BufferReader reader) throws IOException {
-        ObjectNode root = mapper.createObjectNode();
-        root.put("format_version", "1.8.0");
-        ObjectNode animationsDesc = mapper.createObjectNode();
+    private byte[] parseAnimations(BufferReader reader) {
+        var root = new JsonObject();
+        root.addProperty("format_version", "1.8.0");
+        var animationsDesc = new JsonObject();
 
         if (formatVersion > 15) {
             reader.readString(); // hash
@@ -765,18 +767,18 @@ public final class YsmParserV3 implements YsmParser {
         long animCount = reader.readVarint();
         for (long anim = 0; anim < animCount; anim++) {
             String animName = reader.readString();
-            ObjectNode animObj = mapper.createObjectNode();
+            var animObj = new JsonObject();
 
             float animLen = reader.readFloat() / 20.0f;
             if (animLen > 0.0f && !Float.isInfinite(animLen)) {
-                animObj.put("animation_length", animLen);
+                animObj.addProperty("animation_length", animLen);
             }
 
             long loop = reader.readVarint();
             if (loop == 1) {
-                animObj.put("loop", true);
+                animObj.addProperty("loop", true);
             } else if (loop == 2) {
-                animObj.put("loop", "hold_on_last_frame");
+                animObj.addProperty("loop", "hold_on_last_frame");
             }
 
             if (formatVersion > 9) {
@@ -787,9 +789,9 @@ public final class YsmParserV3 implements YsmParser {
                 for (long molangI = 0; molangI < blendWeightMolangs; molangI++) {
                     int type = reader.readByte();
                     if (type == 1) {
-                        animObj.put("blend_weight", reader.readFloat());
+                        animObj.addProperty("blend_weight", reader.readFloat());
                     } else if (type == 2) {
-                        animObj.put("blend_weight", reader.readString());
+                        animObj.addProperty("blend_weight", reader.readString());
                     }
                 }
 
@@ -797,189 +799,189 @@ public final class YsmParserV3 implements YsmParser {
             }
 
             long boneCount = reader.readVarint();
-            ObjectNode bonesObj = mapper.createObjectNode();
+            var bonesObj = new JsonObject();
 
             for (long b = 0; b < boneCount; b++) {
                 String boneNameValue = reader.readString();
-                ObjectNode boneData = mapper.createObjectNode();
+                var boneData = new JsonObject();
 
                 var rotation = parseChannel(reader);
                 var position = parseChannel(reader);
                 var scale = parseChannel(reader);
 
-                JsonNode rotJson = channelToJson(rotation);
-                if (rotJson != null) boneData.set("rotation", rotJson);
+                JsonElement rotJson = channelToJson(rotation);
+                if (rotJson != null) boneData.add("rotation", rotJson);
 
-                JsonNode posJson = channelToJson(position);
-                if (posJson != null) boneData.set("position", posJson);
+                JsonElement posJson = channelToJson(position);
+                if (posJson != null) boneData.add("position", posJson);
 
-                JsonNode scaleJson = channelToJson(scale);
-                if (scaleJson != null) boneData.set("scale", scaleJson);
+                JsonElement scaleJson = channelToJson(scale);
+                if (scaleJson != null) boneData.add("scale", scaleJson);
 
                 if (!boneData.isEmpty()) {
-                    bonesObj.set(boneNameValue, boneData);
+                    bonesObj.add(boneNameValue, boneData);
                 }
             }
 
             if (!bonesObj.isEmpty()) {
-                animObj.set("bones", bonesObj);
+                animObj.add("bones", bonesObj);
             }
 
             // Timeline
             long tlHeader = reader.readVarint();
             if (tlHeader > 0) {
-                ObjectNode tlObj = mapper.createObjectNode();
+                var tlObj = new JsonObject();
                 for (long i = 0; i < tlHeader; i++) {
                     long tlInside = reader.readVarint();
-                    ArrayNode eventArr = mapper.createArrayNode();
+                    var eventArr = new JsonArray();
                     for (long j = 0; j < tlInside; j++) {
                         eventArr.add(reader.readString());
                     }
                     float time = reader.readFloat() / 20.0f;
-                    tlObj.set(String.valueOf(time), eventArr);
+                    tlObj.add(String.valueOf(time), eventArr);
                 }
-                animObj.set("timeline", tlObj);
+                animObj.add("timeline", tlObj);
             }
 
             // Sound effects
             if (formatVersion > 9) {
                 long effHeader = reader.readVarint();
                 if (effHeader > 0) {
-                    ObjectNode efObj = mapper.createObjectNode();
+                    var efObj = new JsonObject();
                     for (long i = 0; i < effHeader; i++) {
                         String effect = reader.readString();
                         float time = reader.readFloat() / 20.0f;
                         String timeStr = (Math.abs(time) < 1e-6f) ? "0.0" : String.valueOf(time);
-                        ObjectNode effItem = mapper.createObjectNode();
-                        effItem.put("effect", effect);
-                        efObj.set(timeStr, effItem);
+                        var effItem = new JsonObject();
+                        effItem.addProperty("effect", effect);
+                        efObj.add(timeStr, effItem);
                     }
-                    animObj.set("sound_effects", efObj);
+                    animObj.add("sound_effects", efObj);
                 }
             }
 
-            animationsDesc.set(animName, animObj);
+            animationsDesc.add(animName, animObj);
         }
 
         if (!animationsDesc.isEmpty()) {
-            root.set("animations", animationsDesc);
+            root.add("animations", animationsDesc);
         }
 
-        return mapper.writeValueAsBytes(root);
+        return getGson().toJson(root).getBytes(StandardCharsets.UTF_8);
     }
 
-    private byte[] parseAnimationControllers(BufferReader reader) throws IOException {
-        ObjectNode root = mapper.createObjectNode();
-        root.put("format_version", "1.19.0");
-        ObjectNode controllers = mapper.createObjectNode();
+    private byte[] parseAnimationControllers(BufferReader reader) {
+        var root = new JsonObject();
+        root.addProperty("format_version", "1.19.0");
+        var controllers = new JsonObject();
 
         long animCount = reader.readVarint();
         for (long anim = 0; anim < animCount; anim++) {
             String animName = reader.readString();
-            ObjectNode controllerData = mapper.createObjectNode();
+            var controllerData = new JsonObject();
 
             String initialState = reader.readString();
             if (!initialState.isEmpty()) {
-                controllerData.put("initial_state", initialState);
+                controllerData.addProperty("initial_state", initialState);
             }
 
-            ObjectNode statesData = mapper.createObjectNode();
+            var statesData = new JsonObject();
             long statesCount = reader.readVarint();
 
             for (long i = 0; i < statesCount; i++) {
                 String stateName = reader.readString();
-                ObjectNode stateObj = mapper.createObjectNode();
+                var stateObj = new JsonObject();
 
                 long animationsSize = reader.readVarint();
                 if (animationsSize > 0) {
-                    ArrayNode animArray = mapper.createArrayNode();
+                    var animArray = new JsonArray();
                     for (long j = 0; j < animationsSize; j++) {
                         String ak = reader.readString();
                         String av = reader.readString();
                         if (av.isEmpty()) {
                             animArray.add(ak);
                         } else {
-                            ObjectNode animItem = mapper.createObjectNode();
-                            animItem.put(ak, av);
+                            var animItem = new JsonObject();
+                            animItem.addProperty(ak, av);
                             animArray.add(animItem);
                         }
                     }
-                    stateObj.set("animations", animArray);
+                    stateObj.add("animations", animArray);
                 }
 
                 long transitionsSize = reader.readVarint();
                 if (transitionsSize > 0) {
-                    ArrayNode transArray = mapper.createArrayNode();
+                    var transArray = new JsonArray();
                     for (long j = 0; j < transitionsSize; j++) {
                         String tk = reader.readString();
                         String tv = reader.readString();
-                        ObjectNode transItem = mapper.createObjectNode();
-                        transItem.put(tk, tv);
+                        var transItem = new JsonObject();
+                        transItem.addProperty(tk, tv);
                         transArray.add(transItem);
                     }
-                    stateObj.set("transitions", transArray);
+                    stateObj.add("transitions", transArray);
                 }
 
                 long onEntryCount = reader.readVarint();
                 if (onEntryCount > 0) {
-                    ArrayNode entryArray = mapper.createArrayNode();
+                    var entryArray = new JsonArray();
                     for (long j = 0; j < onEntryCount; j++) {
                         entryArray.add(reader.readString());
                     }
-                    stateObj.set("on_entry", entryArray);
+                    stateObj.add("on_entry", entryArray);
                 }
 
                 long onExitCount = reader.readVarint();
                 if (onExitCount > 0) {
-                    ArrayNode exitArray = mapper.createArrayNode();
+                    var exitArray = new JsonArray();
                     for (long j = 0; j < onExitCount; j++) {
                         exitArray.add(reader.readString());
                     }
-                    stateObj.set("on_exit", exitArray);
+                    stateObj.add("on_exit", exitArray);
                 }
 
                 if (reader.readVarint() != 0) {
-                    stateObj.put("blend_transition", reader.readFloat());
+                    stateObj.addProperty("blend_transition", reader.readFloat());
                 } else {
                     long blendTransitionsCount = reader.readVarint();
                     if (blendTransitionsCount > 0) {
-                        ObjectNode blendObj = mapper.createObjectNode();
+                        var blendObj = new JsonObject();
                         for (long j = 0; j < blendTransitionsCount; j++) {
                             float bk = reader.readFloat();
                             float bv = reader.readFloat();
-                            blendObj.put(String.valueOf(bk), bv);
+                            blendObj.addProperty(String.valueOf(bk), bv);
                         }
-                        stateObj.set("blend_transitions", blendObj);
+                        stateObj.add("blend_transitions", blendObj);
                     }
                 }
 
                 if (reader.readVarint() != 0) {
-                    stateObj.put("blend_via_shortest_path", true);
+                    stateObj.addProperty("blend_via_shortest_path", true);
                 }
 
                 if (formatVersion > 26) {
                     long soundEffectsCount = reader.readVarint();
                     if (soundEffectsCount > 0) {
-                        ArrayNode soundEffectsArray = mapper.createArrayNode();
+                        var soundEffectsArray = new JsonArray();
                         for (long j = 0; j < soundEffectsCount; j++) {
                             String effectName = reader.readString();
-                            ObjectNode effectItem = mapper.createObjectNode();
-                            effectItem.put("effect", effectName);
+                            var effectItem = new JsonObject();
+                            effectItem.addProperty("effect", effectName);
                             soundEffectsArray.add(effectItem);
                         }
-                        stateObj.set("sound_effects", soundEffectsArray);
+                        stateObj.add("sound_effects", soundEffectsArray);
                     }
                 }
 
-                statesData.set(stateName, stateObj);
+                statesData.add(stateName, stateObj);
             }
 
-            controllerData.set("states", statesData);
-            controllers.set(animName, controllerData);
+            controllerData.add("states", statesData);
+            controllers.add(animName, controllerData);
         }
 
-        root.set("animation_controllers", controllers);
-        return mapper.writeValueAsBytes(root);
+        root.add("animation_controllers", controllers);
+        return getGson().toJson(root).getBytes(StandardCharsets.UTF_8);
     }
 
     private byte[] parseModels(BufferReader reader) throws IOException {
@@ -1061,126 +1063,126 @@ public final class YsmParserV3 implements YsmParser {
         reader.readVarint();
         reader.readVarint();
 
-        ObjectNode outGeom = mapper.createObjectNode();
-        ObjectNode description = mapper.createObjectNode();
-        description.put("identifier", identifier);
-        description.put("texture_width", GeometrySolver.cleanNumber(textureWidth));
-        description.put("texture_height", GeometrySolver.cleanNumber(textureHeight));
-        description.put("visible_bounds_width", GeometrySolver.cleanNumber(visibleBoundsWidth));
-        description.put("visible_bounds_height", GeometrySolver.cleanNumber(visibleBoundsHeight));
+        var outGeom = new JsonObject();
+        var description = new JsonObject();
+        description.addProperty("identifier", identifier);
+        description.addProperty("texture_width", GeometrySolver.cleanNumber(textureWidth));
+        description.addProperty("texture_height", GeometrySolver.cleanNumber(textureHeight));
+        description.addProperty("visible_bounds_width", GeometrySolver.cleanNumber(visibleBoundsWidth));
+        description.addProperty("visible_bounds_height", GeometrySolver.cleanNumber(visibleBoundsHeight));
 
-        ArrayNode offsetArr = mapper.createArrayNode();
+        var offsetArr = new JsonArray();
         for (float v : offsetList) {
             offsetArr.add(GeometrySolver.cleanNumber(v));
         }
-        description.set("visible_bounds_offset", offsetArr);
-        outGeom.set("description", description);
+        description.add("visible_bounds_offset", offsetArr);
+        outGeom.add("description", description);
 
-        ArrayNode bonesArr = mapper.createArrayNode();
+        var bonesArr = new JsonArray();
         for (var b : bones) {
-            ObjectNode bJson = mapper.createObjectNode();
-            bJson.put("name", b.name());
+            var bJson = new JsonObject();
+            bJson.addProperty("name", b.name());
 
-            ArrayNode pivotArr = mapper.createArrayNode();
+            var pivotArr = new JsonArray();
             pivotArr.add(GeometrySolver.cleanNumber(-b.pivot().x()));
             pivotArr.add(GeometrySolver.cleanNumber(b.pivot().y()));
             pivotArr.add(GeometrySolver.cleanNumber(b.pivot().z()));
-            bJson.set("pivot", pivotArr);
+            bJson.add("pivot", pivotArr);
 
             if (!b.parent().isEmpty()) {
-                bJson.put("parent", b.parent());
+                bJson.addProperty("parent", b.parent());
             }
 
             float radToDeg = (float) (180.0 / Math.PI);
             var rot = new Vector3D((-b.rotation().x()) * radToDeg, (-b.rotation().y()) * radToDeg, b.rotation().z() * radToDeg);
             if (Math.abs(rot.x()) > 1e-6f || Math.abs(rot.y()) > 1e-6f || Math.abs(rot.z()) > 1e-6f) {
-                ArrayNode rotArr = mapper.createArrayNode();
+                var rotArr = new JsonArray();
                 rotArr.add(GeometrySolver.cleanNumber(rot.x()));
                 rotArr.add(GeometrySolver.cleanNumber(rot.y()));
                 rotArr.add(GeometrySolver.cleanNumber(rot.z()));
-                bJson.set("rotation", rotArr);
+                bJson.add("rotation", rotArr);
             }
 
-            ArrayNode cubesArr = mapper.createArrayNode();
+            var cubesArr = new JsonArray();
             for (var faces : b.cubes()) {
                 try {
                     BlockbenchCube bbCube = GeometrySolver.restoreBlockbenchCube(faces, 0.0f, (int) textureWidth, (int) textureHeight);
-                    ObjectNode cJson = mapper.createObjectNode();
+                    var cJson = new JsonObject();
 
-                    ArrayNode originArr = mapper.createArrayNode();
+                    var originArr = new JsonArray();
                     originArr.add(GeometrySolver.cleanNumber(bbCube.origin().x()));
                     originArr.add(GeometrySolver.cleanNumber(bbCube.origin().y()));
                     originArr.add(GeometrySolver.cleanNumber(bbCube.origin().z()));
-                    cJson.set("origin", originArr);
+                    cJson.add("origin", originArr);
 
-                    ArrayNode sizeArr = mapper.createArrayNode();
+                    var sizeArr = new JsonArray();
                     sizeArr.add(GeometrySolver.cleanNumber(bbCube.size().x()));
                     sizeArr.add(GeometrySolver.cleanNumber(bbCube.size().y()));
                     sizeArr.add(GeometrySolver.cleanNumber(bbCube.size().z()));
-                    cJson.set("size", sizeArr);
+                    cJson.add("size", sizeArr);
 
-                    ArrayNode bbPivotArr = mapper.createArrayNode();
+                    var bbPivotArr = new JsonArray();
                     bbPivotArr.add(GeometrySolver.cleanNumber(bbCube.pivot().x()));
                     bbPivotArr.add(GeometrySolver.cleanNumber(bbCube.pivot().y()));
                     bbPivotArr.add(GeometrySolver.cleanNumber(bbCube.pivot().z()));
-                    cJson.set("pivot", bbPivotArr);
+                    cJson.add("pivot", bbPivotArr);
 
-                    ArrayNode bbRotArr = mapper.createArrayNode();
+                    var bbRotArr = new JsonArray();
                     bbRotArr.add(GeometrySolver.cleanNumber(bbCube.rotation().x()));
                     bbRotArr.add(GeometrySolver.cleanNumber(bbCube.rotation().y()));
                     bbRotArr.add(GeometrySolver.cleanNumber(bbCube.rotation().z()));
-                    cJson.set("rotation", bbRotArr);
+                    cJson.add("rotation", bbRotArr);
 
-                    ObjectNode uvJson = mapper.createObjectNode();
+                    var uvJson = new JsonObject();
                     for (var uvEntry : bbCube.uv().entrySet()) {
-                        ObjectNode faceUv = mapper.createObjectNode();
-                        ArrayNode uvs = mapper.createArrayNode();
+                        var faceUv = new JsonObject();
+                        var uvs = new JsonArray();
                         uvs.add(GeometrySolver.cleanNumber(uvEntry.getValue().u()));
                         uvs.add(GeometrySolver.cleanNumber(uvEntry.getValue().v()));
-                        faceUv.set("uv", uvs);
+                        faceUv.add("uv", uvs);
 
-                        ArrayNode uvSizes = mapper.createArrayNode();
+                        var uvSizes = new JsonArray();
                         uvSizes.add(GeometrySolver.cleanNumber(uvEntry.getValue().uSize()));
                         uvSizes.add(GeometrySolver.cleanNumber(uvEntry.getValue().vSize()));
-                        faceUv.set("uv_size", uvSizes);
+                        faceUv.add("uv_size", uvSizes);
 
-                        uvJson.set(uvEntry.getKey(), faceUv);
+                        uvJson.add(uvEntry.getKey(), faceUv);
                     }
-                    cJson.set("uv", uvJson);
+                    cJson.add("uv", uvJson);
                     cubesArr.add(cJson);
                 } catch (Exception ignored) {
                 }
             }
 
             if (!cubesArr.isEmpty()) {
-                bJson.set("cubes", cubesArr);
+                bJson.add("cubes", cubesArr);
             }
 
             bonesArr.add(bJson);
         }
-        outGeom.set("bones", bonesArr);
+        outGeom.add("bones", bonesArr);
 
-        ObjectNode finalOutput = mapper.createObjectNode();
-        finalOutput.put("format_version", "1.12.0");
-        ArrayNode geomArr = mapper.createArrayNode();
+        var finalOutput = new JsonObject();
+        finalOutput.addProperty("format_version", "1.12.0");
+        var geomArr = new JsonArray();
         geomArr.add(outGeom);
-        finalOutput.set("minecraft:geometry", geomArr);
+        finalOutput.add("minecraft:geometry", geomArr);
 
-        return mapper.writeValueAsBytes(finalOutput);
+        return getGson().toJson(finalOutput).getBytes(StandardCharsets.UTF_8);
     }
 
-    private void parseLegacyYSMInfo(BufferReader reader) throws IOException {
+    private void parseLegacyYSMInfo(BufferReader reader) {
         String infoName = reader.readString();
         String infoTips = reader.readString();
 
         long extraAnims = reader.readVarint();
-        ArrayNode jinfoExtra = mapper.createArrayNode();
+        var jinfoExtra = new JsonArray();
         for (long i = 0; i < extraAnims; i++) {
             jinfoExtra.add(reader.readString());
         }
 
         long authors = reader.readVarint();
-        ArrayNode jAuthors = mapper.createArrayNode();
+        var jAuthors = new JsonArray();
         for (long i = 0; i < authors; i++) {
             jAuthors.add(reader.readString());
         }
@@ -1188,24 +1190,24 @@ public final class YsmParserV3 implements YsmParser {
         String infoLicense = reader.readString();
         boolean infoFree = reader.readVarint() != 0;
 
-        ObjectNode j = mapper.createObjectNode();
-        j.put("name", infoName);
-        j.put("tips", infoTips);
-        j.set("authors", jAuthors);
-        j.put("license", infoLicense);
-        j.set("extra_animation_names", jinfoExtra);
-        j.put("free", infoFree);
+        var j = new JsonObject();
+        j.addProperty("name", infoName);
+        j.addProperty("tips", infoTips);
+        j.add("authors", jAuthors);
+        j.addProperty("license", infoLicense);
+        j.add("extra_animation_names", jinfoExtra);
+        j.addProperty("free", infoFree);
 
-        infoJsonFile = mapper.writeValueAsBytes(j);
+        infoJsonFile = getGson().toJson(j).getBytes(StandardCharsets.UTF_8);
     }
 
-    private void parseYsmJson(BufferReader reader) throws IOException {
+    private void parseYsmJson(BufferReader reader) {
         reader.readString(); // sha256
-        ObjectNode root = mapper.createObjectNode();
-        ObjectNode metadata = mapper.createObjectNode();
-        ObjectNode properties = mapper.createObjectNode();
+        var root = new JsonObject();
+        var metadata = new JsonObject();
+        var properties = new JsonObject();
 
-        root.put("spec", 2);
+        root.addProperty("spec", 2);
 
         long isNewVersion = reader.readVarint();
         if (isNewVersion == 0) {
@@ -1216,163 +1218,163 @@ public final class YsmParserV3 implements YsmParser {
             reader.readVarint();
         }
 
-        metadata.put("name", reader.readString());
-        metadata.put("tips", reader.readString());
+        metadata.addProperty("name", reader.readString());
+        metadata.addProperty("tips", reader.readString());
 
-        ObjectNode license = mapper.createObjectNode();
-        license.put("type", reader.readString());
-        license.put("desc", reader.readString());
-        metadata.set("license", license);
+        var license = new JsonObject();
+        license.addProperty("type", reader.readString());
+        license.addProperty("desc", reader.readString());
+        metadata.add("license", license);
 
         long authorsCount = reader.readVarint();
         if (authorsCount > 0) {
-            ArrayNode authorsArr = mapper.createArrayNode();
+            var authorsArr = new JsonArray();
             for (long j = 0; j < authorsCount; j++) {
-                ObjectNode authorObj = mapper.createObjectNode();
+                var authorObj = new JsonObject();
                 String authorName = reader.readString();
-                authorObj.put("name", authorName);
-                authorObj.put("role", reader.readString());
+                authorObj.addProperty("name", authorName);
+                authorObj.addProperty("role", reader.readString());
 
                 long authorContact = reader.readVarint();
                 if (authorContact > 0) {
-                    ObjectNode contactsObj = mapper.createObjectNode();
+                    var contactsObj = new JsonObject();
                     for (long k = 0; k < authorContact; k++) {
-                        contactsObj.put(reader.readString(), reader.readString());
+                        contactsObj.addProperty(reader.readString(), reader.readString());
                     }
-                    authorObj.set("contact", contactsObj);
+                    authorObj.add("contact", contactsObj);
                 }
 
-                authorObj.put("comment", reader.readString());
-                authorObj.put("avatar", "avatar/" + PathSanitizer.sanitizeWindowsFilename(authorName + ".png"));
+                authorObj.addProperty("comment", reader.readString());
+                authorObj.addProperty("avatar", "avatar/" + PathSanitizer.sanitizeWindowsFilename(authorName + ".png"));
                 authorsArr.add(authorObj);
             }
-            metadata.set("authors", authorsArr);
+            metadata.add("authors", authorsArr);
         }
 
         long linksCount = reader.readVarint();
         if (linksCount > 0) {
-            ObjectNode linksObj = mapper.createObjectNode();
+            var linksObj = new JsonObject();
             for (long j = 0; j < linksCount; j++) {
-                linksObj.put(reader.readString(), reader.readString());
+                linksObj.addProperty(reader.readString(), reader.readString());
             }
-            metadata.set("link", linksObj);
+            metadata.add("link", linksObj);
         }
 
-        properties.put("width_scale", reader.readFloat());
-        properties.put("height_scale", reader.readFloat());
+        properties.addProperty("width_scale", reader.readFloat());
+        properties.addProperty("height_scale", reader.readFloat());
 
         long extraAnimations = reader.readVarint();
         if (extraAnimations > 0) {
-            ObjectNode extraAnimObj = mapper.createObjectNode();
+            var extraAnimObj = new JsonObject();
             for (long j = 0; j < extraAnimations; j++) {
-                extraAnimObj.put(reader.readString(), reader.readString());
+                extraAnimObj.addProperty(reader.readString(), reader.readString());
             }
-            properties.set("extra_animation", extraAnimObj);
+            properties.add("extra_animation", extraAnimObj);
         }
 
         if (formatVersion > 9) {
             long extraAnimationButtons = reader.readVarint();
             if (extraAnimationButtons > 0) {
-                ArrayNode buttonsArr = mapper.createArrayNode();
+                var buttonsArr = new JsonArray();
                 for (long j = 0; j < extraAnimationButtons; j++) {
-                    ObjectNode buttonObj = mapper.createObjectNode();
-                    buttonObj.put("id", reader.readString());
-                    buttonObj.put("name", reader.readString());
+                    var buttonObj = new JsonObject();
+                    buttonObj.addProperty("id", reader.readString());
+                    buttonObj.addProperty("name", reader.readString());
 
                     if (reader.readVarint() != 0) throw new IllegalStateException();
 
                     long configForms = reader.readVarint();
                     if (configForms > 0) {
-                        ArrayNode configArr = mapper.createArrayNode();
+                        var configArr = new JsonArray();
                         for (long k = 0; k < configForms; k++) {
-                            ObjectNode formObj = mapper.createObjectNode();
+                            var formObj = new JsonObject();
                             String type = reader.readString();
-                            formObj.put("type", type);
-                            formObj.put("title", reader.readString());
-                            formObj.put("description", reader.readString());
-                            formObj.put("value", reader.readString());
+                            formObj.addProperty("type", type);
+                            formObj.addProperty("title", reader.readString());
+                            formObj.addProperty("description", reader.readString());
+                            formObj.addProperty("value", reader.readString());
 
                             float step = reader.readFloat();
                             float min = reader.readFloat();
                             float max = reader.readFloat();
 
                             if (type.equals("range")) {
-                                formObj.put("step", step);
-                                formObj.put("min", min);
-                                formObj.put("max", max);
+                                formObj.addProperty("step", step);
+                                formObj.addProperty("min", min);
+                                formObj.addProperty("max", max);
                             }
 
                             long labelsSize = reader.readVarint();
                             if (labelsSize > 0) {
-                                ObjectNode labelsObj = mapper.createObjectNode();
+                                var labelsObj = new JsonObject();
                                 for (long l = 0; l < labelsSize; l++) {
-                                    labelsObj.put(reader.readString(), reader.readString());
+                                    labelsObj.addProperty(reader.readString(), reader.readString());
                                 }
-                                formObj.set("labels", labelsObj);
+                                formObj.add("labels", labelsObj);
                             }
                             configArr.add(formObj);
                         }
-                        buttonObj.set("config_forms", configArr);
+                        buttonObj.add("config_forms", configArr);
                     }
                     buttonsArr.add(buttonObj);
                 }
-                properties.set("extra_animation_buttons", buttonsArr);
+                properties.add("extra_animation_buttons", buttonsArr);
             }
 
             long cnt = reader.readVarint();
-            ArrayNode extraAnimationClassify = mapper.createArrayNode();
+            var extraAnimationClassify = new JsonArray();
             for (long i = 0; i < cnt; i++) {
-                ObjectNode sigObj = mapper.createObjectNode();
-                sigObj.put("id", reader.readString());
+                var sigObj = new JsonObject();
+                sigObj.addProperty("id", reader.readString());
                 long extras = reader.readVarint();
-                ObjectNode labelsObj = mapper.createObjectNode();
+                var labelsObj = new JsonObject();
                 for (long j = 0; j < extras; j++) {
-                    labelsObj.put(reader.readString(), reader.readString());
+                    labelsObj.addProperty(reader.readString(), reader.readString());
                 }
-                sigObj.set("extra_animation", labelsObj);
+                sigObj.add("extra_animation", labelsObj);
                 extraAnimationClassify.add(sigObj);
             }
-            properties.set("extra_animation_classify", extraAnimationClassify);
+            properties.add("extra_animation_classify", extraAnimationClassify);
         }
 
         String defaultTexture = reader.readString();
         if (!defaultTexture.isEmpty()) {
-            properties.put("default_texture", defaultTexture);
+            properties.addProperty("default_texture", defaultTexture);
         }
 
         String previewAnimation = reader.readString();
         if (!previewAnimation.isEmpty()) {
-            properties.put("preview_animation", previewAnimation);
+            properties.addProperty("preview_animation", previewAnimation);
         }
 
-        properties.put("free", reader.readVarint() != 0);
+        properties.addProperty("free", reader.readVarint() != 0);
 
         if (formatVersion > 4) {
-            properties.put("render_layers_first", reader.readVarint() != 0);
+            properties.addProperty("render_layers_first", reader.readVarint() != 0);
         }
 
         if (formatVersion >= 15) {
-            properties.put("all_cutout", reader.readVarint() != 0);
-            properties.put("disable_preview_rotation", reader.readVarint() != 0);
+            properties.addProperty("all_cutout", reader.readVarint() != 0);
+            properties.addProperty("disable_preview_rotation", reader.readVarint() != 0);
         }
 
         String guiForeground = "";
         String guiBackground = "";
 
         if (formatVersion > 15) {
-            properties.put("gui_no_lighting", reader.readVarint() != 0);
+            properties.addProperty("gui_no_lighting", reader.readVarint() != 0);
             if (formatVersion >= 32) {
-                properties.put("merge_multiline_expr", reader.readVarint() != 0);
+                properties.addProperty("merge_multiline_expr", reader.readVarint() != 0);
             }
 
             guiForeground = reader.readString();
             if (!guiForeground.isEmpty()) {
-                properties.put("gui_foreground", guiForeground);
+                properties.addProperty("gui_foreground", guiForeground);
             }
 
             guiBackground = reader.readString();
             if (!guiBackground.isEmpty()) {
-                properties.put("gui_background", guiBackground);
+                properties.addProperty("gui_background", guiBackground);
             }
 
             long avatars = reader.readVarint();
@@ -1389,12 +1391,12 @@ public final class YsmParserV3 implements YsmParser {
             }
         }
 
-        root.set("metadata", metadata);
-        root.set("properties", properties);
-        root.set("files", buildFilesFromParsedData());
+        root.add("metadata", metadata);
+        root.add("properties", properties);
+        root.add("files", buildFilesFromParsedData());
 
         cleanJsonFloats(root);
-        ysmJsonFile = mapper.writeValueAsBytes(root);
+        ysmJsonFile = getGson().toJson(root).getBytes(StandardCharsets.UTF_8);
 
         if (formatVersion <= 15) {
             return;
@@ -1424,29 +1426,33 @@ public final class YsmParserV3 implements YsmParser {
         }
     }
 
-    private void cleanJsonFloats(JsonNode node) {
-        if (node.isObject()) {
-            ObjectNode obj = (ObjectNode) node;
-            var fields = new ArrayList<String>();
-            obj.fieldNames().forEachRemaining(fields::add);
-            for (String field : fields) {
-                JsonNode child = obj.get(field);
-                if (child.isFloatingPointNumber()) {
-                    double val = child.doubleValue();
-                    double rounded = Math.round(val * 100000.0) / 100000.0;
-                    obj.put(field, rounded);
+    private void cleanJsonFloats(JsonElement element) {
+        if (element.isJsonObject()) {
+            var obj = element.getAsJsonObject();
+            for (var entry : obj.entrySet()) {
+                var child = entry.getValue();
+                if (child.isJsonPrimitive() && child.getAsJsonPrimitive().isNumber()) {
+                    var prim = child.getAsJsonPrimitive();
+                    double val = prim.getAsDouble();
+                    if (val != Math.floor(val) || prim.getAsString().contains(".")) {
+                        double rounded = Math.round(val * 100000.0) / 100000.0;
+                        entry.setValue(new JsonPrimitive(rounded));
+                    }
                 } else {
                     cleanJsonFloats(child);
                 }
             }
-        } else if (node.isArray()) {
-            ArrayNode arr = (ArrayNode) node;
+        } else if (element.isJsonArray()) {
+            var arr = element.getAsJsonArray();
             for (int i = 0; i < arr.size(); i++) {
-                JsonNode child = arr.get(i);
-                if (child.isFloatingPointNumber()) {
-                    double val = child.doubleValue();
-                    double rounded = Math.round(val * 100000.0) / 100000.0;
-                    arr.set(i, mapper.getNodeFactory().numberNode(rounded));
+                var child = arr.get(i);
+                if (child.isJsonPrimitive() && child.getAsJsonPrimitive().isNumber()) {
+                    var prim = child.getAsJsonPrimitive();
+                    double val = prim.getAsDouble();
+                    if (val != Math.floor(val) || prim.getAsString().contains(".")) {
+                        double rounded = Math.round(val * 100000.0) / 100000.0;
+                        arr.set(i, new JsonPrimitive(rounded));
+                    }
                 } else {
                     cleanJsonFloats(child);
                 }
@@ -1454,8 +1460,8 @@ public final class YsmParserV3 implements YsmParser {
         }
     }
 
-    private ObjectNode buildFilesFromParsedData() {
-        ObjectNode files = mapper.createObjectNode();
+    private JsonObject buildFilesFromParsedData() {
+        var files = new JsonObject();
         var subEntityModels = new HashSet<String>();
         for (String name : modelFiles.keySet()) {
             if (!name.equals("main") && !name.equals("arm")) {
@@ -1472,33 +1478,33 @@ public final class YsmParserV3 implements YsmParser {
         );
 
         // Player section
-        ObjectNode player = mapper.createObjectNode();
+        var player = new JsonObject();
 
-        ObjectNode playerModels = mapper.createObjectNode();
-        if (modelFiles.containsKey("main")) playerModels.put("main", "models/main.json");
-        if (modelFiles.containsKey("arm")) playerModels.put("arm", "models/arm.json");
-        if (!playerModels.isEmpty()) player.set("model", playerModels);
+        var playerModels = new JsonObject();
+        if (modelFiles.containsKey("main")) playerModels.addProperty("main", "models/main.json");
+        if (modelFiles.containsKey("arm")) playerModels.addProperty("arm", "models/arm.json");
+        if (!playerModels.isEmpty()) player.add("model", playerModels);
 
-        ObjectNode playerAnims = mapper.createObjectNode();
+        var playerAnims = new JsonObject();
         for (String name : animationFiles.keySet()) {
             if (name.contains("/")) continue;
             if (subEntityModels.contains(name)) continue;
 
             String key = normalizeAnimKey(name);
             String path = "animations/" + PathSanitizer.sanitizeWindowsFilename(animPathComponent(key) + ".animation.json");
-            playerAnims.put(key, path);
+            playerAnims.addProperty(key, path);
         }
-        if (!playerAnims.isEmpty()) player.set("animation", playerAnims);
+        if (!playerAnims.isEmpty()) player.add("animation", playerAnims);
 
-        ArrayNode ac = mapper.createArrayNode();
+        var ac = new JsonArray();
         for (String name : animControllerFiles.keySet()) {
             if (name.contains("/")) continue;
             if (subEntityModels.contains(name)) continue;
             ac.add("controller/" + PathSanitizer.sanitizeWindowsFilename(name + ".json"));
         }
-        player.set("animation_controllers", ac);
+        player.add("animation_controllers", ac);
 
-        ArrayNode playerTex = mapper.createArrayNode();
+        var playerTex = new JsonArray();
         for (String name : textureFiles.keySet()) {
             boolean isSub = false;
             for (String sn : subEntityModels) {
@@ -1509,22 +1515,22 @@ public final class YsmParserV3 implements YsmParser {
             }
             if (isSub) continue;
 
-            ObjectNode texObj = mapper.createObjectNode();
-            texObj.put("uv", "textures/" + PathSanitizer.sanitizeWindowsFilename(name + ".png"));
+            var texObj = new JsonObject();
+            texObj.addProperty("uv", "textures/" + PathSanitizer.sanitizeWindowsFilename(name + ".png"));
 
             String expectedNormal = name + "_normal";
             String expectedSpecular = name + "_specular";
 
             if (specialImageFiles.containsKey(expectedNormal)) {
-                texObj.put("normal", "textures/" + PathSanitizer.sanitizeWindowsFilename(expectedNormal + ".png"));
+                texObj.addProperty("normal", "textures/" + PathSanitizer.sanitizeWindowsFilename(expectedNormal + ".png"));
             }
             if (specialImageFiles.containsKey(expectedSpecular)) {
-                texObj.put("specular", "textures/" + PathSanitizer.sanitizeWindowsFilename(expectedSpecular + ".png"));
+                texObj.addProperty("specular", "textures/" + PathSanitizer.sanitizeWindowsFilename(expectedSpecular + ".png"));
             }
             playerTex.add(texObj);
         }
-        if (!playerTex.isEmpty()) player.set("texture", playerTex);
-        files.set("player", player);
+        if (!playerTex.isEmpty()) player.add("texture", playerTex);
+        files.add("player", player);
 
         // Sub entities section
         var catModels = new LinkedHashMap<String, List<String>>();
@@ -1542,10 +1548,10 @@ public final class YsmParserV3 implements YsmParser {
 
         for (var catEntry : catModels.entrySet()) {
             String cat = catEntry.getKey();
-            ObjectNode section = mapper.createObjectNode();
+            var section = new JsonObject();
             for (String mn : catEntry.getValue()) {
-                ObjectNode entry = mapper.createObjectNode();
-                entry.put("model", "models/" + PathSanitizer.sanitizeWindowsFilename(mn + ".json"));
+                var entry = new JsonObject();
+                entry.addProperty("model", "models/" + PathSanitizer.sanitizeWindowsFilename(mn + ".json"));
 
                 for (String animName : animationFiles.keySet()) {
                     boolean match = false;
@@ -1564,7 +1570,7 @@ public final class YsmParserV3 implements YsmParser {
                                 + PathSanitizer.sanitizeWindowsFilename(mn + ".animation.json");
                     }
                     if (match) {
-                        entry.put("animation", animPath);
+                        entry.addProperty("animation", animPath);
                         break;
                     }
                 }
@@ -1586,21 +1592,21 @@ public final class YsmParserV3 implements YsmParser {
                                 + PathSanitizer.sanitizeWindowsFilename(mn + ".json");
                     }
                     if (match) {
-                        entry.put("controller", animPath);
+                        entry.addProperty("controller", animPath);
                         break;
                     }
                 }
 
                 for (String texName : textureFiles.keySet()) {
                     if (texName.equals(mn) || texName.startsWith(mn + "_")) {
-                        entry.put("texture", "textures/" + PathSanitizer.sanitizeWindowsFilename(mn + ".png"));
+                        entry.addProperty("texture", "textures/" + PathSanitizer.sanitizeWindowsFilename(mn + ".png"));
                         break;
                     }
                 }
 
-                section.set(mn, entry);
+                section.add(mn, entry);
             }
-            files.set(cat, section);
+            files.add(cat, section);
         }
 
         return files;

@@ -1,8 +1,7 @@
 package io.github.toxicity188.ysmconverter.parser;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import org.jetbrains.annotations.CheckReturnValue;
 import org.jetbrains.annotations.NotNull;
 
@@ -93,24 +92,23 @@ public final class PlayerTextureCollector {
     }
 
     /**
-     * Emits the collected textures into the given player JSON object node.
+     * Emits the collected textures into the given player JSON object.
      *
-     * @param playerNode player JSON node
-     * @param mapper     Jackson object mapper
+     * @param playerNode player JSON object
      */
-    public void emitTo(@NotNull ObjectNode playerNode, @NotNull ObjectMapper mapper) {
+    public void emitTo(@NotNull JsonObject playerNode) {
         if (entries.isEmpty()) {
             return;
         }
 
-        ArrayNode texArr = mapper.createArrayNode();
-        for (Entry entry : entries) {
-            ObjectNode texObj = mapper.createObjectNode();
-            for (Variant v : entry.variants()) {
-                texObj.put(v.type, v.path);
+        var texArr = new JsonArray();
+        for (var entry : entries) {
+            var texObj = new JsonObject();
+            for (var v : entry.variants()) {
+                texObj.addProperty(v.type, v.path);
             }
             texArr.add(texObj);
         }
-        playerNode.set("texture", texArr);
+        playerNode.add("texture", texArr);
     }
 }
