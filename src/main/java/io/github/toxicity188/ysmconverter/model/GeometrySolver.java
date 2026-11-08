@@ -1,7 +1,9 @@
 package io.github.toxicity188.ysmconverter.model;
 
 import io.github.toxicity188.ysmconverter.binary.Vector3D;
-import io.github.toxicity188.ysmconverter.model.GeometryTypes.*;
+import io.github.toxicity188.ysmconverter.model.GeometryTypes.BlockbenchCube;
+import io.github.toxicity188.ysmconverter.model.GeometryTypes.Face;
+import io.github.toxicity188.ysmconverter.model.GeometryTypes.UvBox;
 import org.jetbrains.annotations.CheckReturnValue;
 import org.jetbrains.annotations.NotNull;
 

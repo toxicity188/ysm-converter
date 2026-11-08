@@ -3,8 +3,6 @@ package io.github.toxicity188.ysmconverter.format;
 import org.jetbrains.annotations.CheckReturnValue;
 import org.jetbrains.annotations.NotNull;
 
-import java.nio.charset.StandardCharsets;
-
 /**
  * Detects YSM format version from binary header data.
  *

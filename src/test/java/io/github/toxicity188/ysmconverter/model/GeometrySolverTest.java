@@ -1,12 +1,14 @@
 package io.github.toxicity188.ysmconverter.model;
 
 import io.github.toxicity188.ysmconverter.binary.Vector3D;
-import io.github.toxicity188.ysmconverter.model.GeometryTypes.*;
+import io.github.toxicity188.ysmconverter.model.GeometryTypes.Face;
+import io.github.toxicity188.ysmconverter.model.GeometryTypes.Vertex;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class GeometrySolverTest {
 

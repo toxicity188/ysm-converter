@@ -3,10 +3,10 @@ package io.github.toxicity188.ysmconverter.crypto;
 import org.jetbrains.annotations.CheckReturnValue;
 import org.jetbrains.annotations.NotNull;
 
-import java.security.GeneralSecurityException;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.security.GeneralSecurityException;
 
 /**
  * Standard AES-128-CBC decryption utility for YSM legacy V1 and V2 models.

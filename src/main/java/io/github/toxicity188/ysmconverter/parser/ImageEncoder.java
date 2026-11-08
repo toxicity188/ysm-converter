@@ -3,10 +3,10 @@ package io.github.toxicity188.ysmconverter.parser;
 import org.jetbrains.annotations.CheckReturnValue;
 import org.jetbrains.annotations.NotNull;
 
+import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import javax.imageio.ImageIO;
 
 /**
  * Utility for converting raw RGBA pixel arrays into standard PNG format.
