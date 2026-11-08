@@ -1,0 +1,3 @@
+[submodule "external/YSMParser"]
+	path = external/YSMParser
+	url = https://github.com/OpenYSM/YSMParser.git
