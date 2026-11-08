@@ -76,15 +76,9 @@ public final class YsmParserV1 implements YsmParser {
                     | (buffer[offset + 3] & 0xFF);
             offset += 4;
 
-            int keyLen = ((buffer[offset] & 0xFF) << 24)
-                    | ((buffer[offset + 1] & 0xFF) << 16)
-                    | ((buffer[offset + 2] & 0xFF) << 8)
-                    | (buffer[offset + 3] & 0xFF);
-            offset += 4;
-
-            byte[] key = new byte[keyLen];
-            System.arraycopy(buffer, offset, key, 0, keyLen);
-            offset += keyLen;
+            byte[] key = new byte[16];
+            System.arraycopy(buffer, offset, key, 0, 16);
+            offset += 16;
 
             byte[] iv = new byte[16];
             System.arraycopy(buffer, offset, iv, 0, 16);

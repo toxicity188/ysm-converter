@@ -1245,7 +1245,8 @@ public final class YsmParserV3 implements YsmParser {
                 }
 
                 authorObj.addProperty("comment", reader.readString());
-                authorObj.addProperty("avatar", "avatar/" + PathSanitizer.sanitizeWindowsFilename(authorName + ".png"));
+                String avName = ImageFormat.resolveImageFilename(authorName, avatarFiles.get(authorName), ".png");
+                authorObj.addProperty("avatar", "avatar/" + PathSanitizer.sanitizeWindowsFilename(avName));
                 authorsArr.add(authorObj);
             }
             metadata.add("authors", authorsArr);
@@ -1389,6 +1390,23 @@ public final class YsmParserV3 implements YsmParser {
                     reader.readVarint(); // unk_flag
                 }
             }
+
+            if (metadata.has("authors")) {
+                var authorsArr = metadata.getAsJsonArray("authors");
+                for (var elem : authorsArr) {
+                    if (elem.isJsonObject()) {
+                        var aObj = elem.getAsJsonObject();
+                        if (aObj.has("name")) {
+                            String aName = aObj.get("name").getAsString();
+                            byte[] aData = avatarFiles.get(aName);
+                            if (aData != null) {
+                                String avName = ImageFormat.resolveImageFilename(aName, aData, ".png");
+                                aObj.addProperty("avatar", "avatar/" + PathSanitizer.sanitizeWindowsFilename(avName));
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         root.add("metadata", metadata);
@@ -1414,7 +1432,8 @@ public final class YsmParserV3 implements YsmParser {
                 } else if (name.equals("gui_background") && !guiBackground.isEmpty()) {
                     relativePath = guiBackground;
                 } else {
-                    relativePath = "background/" + PathSanitizer.sanitizeWindowsFilename(name + ".png");
+                    String bgFilename = ImageFormat.resolveImageFilename(name, fileData, ".png");
+                    relativePath = "background/" + PathSanitizer.sanitizeWindowsFilename(bgFilename);
                 }
 
                 backgroundFiles.put(relativePath, fileData);
@@ -1516,16 +1535,22 @@ public final class YsmParserV3 implements YsmParser {
             if (isSub) continue;
 
             var texObj = new JsonObject();
-            texObj.addProperty("uv", "textures/" + PathSanitizer.sanitizeWindowsFilename(name + ".png"));
+            byte[] uvData = textureFiles.get(name);
+            String uvFilename = ImageFormat.resolveImageFilename(name, uvData, ".png");
+            texObj.addProperty("uv", "textures/" + PathSanitizer.sanitizeWindowsFilename(uvFilename));
 
             String expectedNormal = name + "_normal";
             String expectedSpecular = name + "_specular";
 
             if (specialImageFiles.containsKey(expectedNormal)) {
-                texObj.addProperty("normal", "textures/" + PathSanitizer.sanitizeWindowsFilename(expectedNormal + ".png"));
+                byte[] normData = specialImageFiles.get(expectedNormal);
+                String normFilename = ImageFormat.resolveImageFilename(expectedNormal, normData, ".png");
+                texObj.addProperty("normal", "textures/" + PathSanitizer.sanitizeWindowsFilename(normFilename));
             }
             if (specialImageFiles.containsKey(expectedSpecular)) {
-                texObj.addProperty("specular", "textures/" + PathSanitizer.sanitizeWindowsFilename(expectedSpecular + ".png"));
+                byte[] specData = specialImageFiles.get(expectedSpecular);
+                String specFilename = ImageFormat.resolveImageFilename(expectedSpecular, specData, ".png");
+                texObj.addProperty("specular", "textures/" + PathSanitizer.sanitizeWindowsFilename(specFilename));
             }
             playerTex.add(texObj);
         }
@@ -1599,7 +1624,9 @@ public final class YsmParserV3 implements YsmParser {
 
                 for (String texName : textureFiles.keySet()) {
                     if (texName.equals(mn) || texName.startsWith(mn + "_")) {
-                        entry.addProperty("texture", "textures/" + PathSanitizer.sanitizeWindowsFilename(mn + ".png"));
+                        byte[] texData = textureFiles.get(texName);
+                        String texFilename = ImageFormat.resolveImageFilename(mn, texData, ".png");
+                        entry.addProperty("texture", "textures/" + PathSanitizer.sanitizeWindowsFilename(texFilename));
                         break;
                     }
                 }
@@ -1645,22 +1672,20 @@ public final class YsmParserV3 implements YsmParser {
         exportMapped(outputDirectory, useLegacyRootLayout, animControllerFiles, "controller", ".json");
         exportMapped(outputDirectory, useLegacyRootLayout, modelFiles, "models", ".json");
         exportMapped(outputDirectory, useLegacyRootLayout, animationFiles, "animations", ".animation.json");
-        exportMapped(outputDirectory, useLegacyRootLayout, textureFiles, "textures", ".png");
-        exportMapped(outputDirectory, useLegacyRootLayout, specialImageFiles, "textures", ".png");
+        exportImageMapped(outputDirectory, useLegacyRootLayout, textureFiles, "textures");
+        exportImageMapped(outputDirectory, useLegacyRootLayout, specialImageFiles, "textures");
 
         for (var entry : avatarFiles.entrySet()) {
-            String safeFilename = PathSanitizer.sanitizeWindowsFilename(entry.getKey() + ".png");
+            String filename = ImageFormat.resolveImageFilename(entry.getKey(), entry.getValue(), ".png");
+            String safeFilename = PathSanitizer.sanitizeWindowsFilename(filename);
             String rel = useLegacyRootLayout ? safeFilename : ("avatar/" + safeFilename);
             Path target = PathSanitizer.safeResolve(outputDirectory, rel);
             PathSanitizer.writeSafe(target, entry.getValue());
         }
 
         for (var entry : backgroundFiles.entrySet()) {
-            String rel = entry.getKey();
-            if (!rel.contains(".")) {
-                rel += ".png";
-            }
-            Path p = Path.of(rel);
+            String filename = ImageFormat.resolveImageFilename(entry.getKey(), entry.getValue(), ".png");
+            Path p = Path.of(filename);
             String safeFilename = PathSanitizer.sanitizeWindowsFilename(p.getFileName().toString());
             Path safeParent = p.getParent();
             String safeRel = (safeParent != null ? safeParent.toString().replace('\\', '/') + "/" : "") + safeFilename;
@@ -1692,6 +1717,24 @@ public final class YsmParserV3 implements YsmParser {
         }
     }
 
+    private void exportImageMapped(
+            Path outputDirectory,
+            boolean useLegacyRootLayout,
+            Map<String, byte[]> items,
+            String defaultFolder
+    ) throws IOException {
+        for (var entry : items.entrySet()) {
+            String rawPath = ImageFormat.resolveImageFilename(entry.getKey(), entry.getValue(), ".png");
+            Path p = Path.of(rawPath);
+            String safeFilename = PathSanitizer.sanitizeWindowsFilename(p.getFileName().toString());
+            Path parent = p.getParent();
+            String safeRel = (parent != null ? parent.toString().replace('\\', '/') + "/" : "") + safeFilename;
+            String finalRel = useLegacyRootLayout ? safeFilename : (defaultFolder + "/" + safeRel);
+            Path target = PathSanitizer.safeResolve(outputDirectory, finalRel);
+            PathSanitizer.writeSafe(target, entry.getValue());
+        }
+    }
+
     @Override
     public @NotNull @UnmodifiableView Map<@NotNull String, byte @NotNull []> getExtractedResources() {
         var map = new LinkedHashMap<String, byte[]>();
@@ -1711,21 +1754,19 @@ public final class YsmParserV3 implements YsmParser {
         addMappedToResources(map, useLegacyRootLayout, animControllerFiles, "controller", ".json");
         addMappedToResources(map, useLegacyRootLayout, modelFiles, "models", ".json");
         addMappedToResources(map, useLegacyRootLayout, animationFiles, "animations", ".animation.json");
-        addMappedToResources(map, useLegacyRootLayout, textureFiles, "textures", ".png");
-        addMappedToResources(map, useLegacyRootLayout, specialImageFiles, "textures", ".png");
+        addImageMappedToResources(map, useLegacyRootLayout, textureFiles, "textures");
+        addImageMappedToResources(map, useLegacyRootLayout, specialImageFiles, "textures");
 
         for (var entry : avatarFiles.entrySet()) {
-            String safeFilename = PathSanitizer.sanitizeWindowsFilename(entry.getKey() + ".png");
+            String filename = ImageFormat.resolveImageFilename(entry.getKey(), entry.getValue(), ".png");
+            String safeFilename = PathSanitizer.sanitizeWindowsFilename(filename);
             String rel = useLegacyRootLayout ? safeFilename : ("avatar/" + safeFilename);
             map.put(rel, entry.getValue());
         }
 
         for (var entry : backgroundFiles.entrySet()) {
-            String rel = entry.getKey();
-            if (!rel.contains(".")) {
-                rel += ".png";
-            }
-            Path p = Path.of(rel);
+            String filename = ImageFormat.resolveImageFilename(entry.getKey(), entry.getValue(), ".png");
+            Path p = Path.of(filename);
             String safeFilename = PathSanitizer.sanitizeWindowsFilename(p.getFileName().toString());
             Path safeParent = p.getParent();
             String safeRel = (safeParent != null ? safeParent.toString().replace('\\', '/') + "/" : "") + safeFilename;
@@ -1734,6 +1775,23 @@ public final class YsmParserV3 implements YsmParser {
         }
 
         return Collections.unmodifiableMap(map);
+    }
+
+    private void addImageMappedToResources(
+            Map<String, byte[]> map,
+            boolean useLegacyRootLayout,
+            Map<String, byte[]> items,
+            String defaultFolder
+    ) {
+        for (var entry : items.entrySet()) {
+            String rawPath = ImageFormat.resolveImageFilename(entry.getKey(), entry.getValue(), ".png");
+            Path p = Path.of(rawPath);
+            String safeFilename = PathSanitizer.sanitizeWindowsFilename(p.getFileName().toString());
+            Path parent = p.getParent();
+            String safeRel = (parent != null ? parent.toString().replace('\\', '/') + "/" : "") + safeFilename;
+            String finalRel = useLegacyRootLayout ? safeFilename : (defaultFolder + "/" + safeRel);
+            map.put(finalRel, entry.getValue());
+        }
     }
 
     private void addMappedToResources(
