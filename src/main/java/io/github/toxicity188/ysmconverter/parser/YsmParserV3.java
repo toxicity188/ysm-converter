@@ -20,7 +20,6 @@ import io.github.toxicity188.ysmconverter.model.GeometryTypes.Face;
 import io.github.toxicity188.ysmconverter.model.GeometryTypes.Vertex;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.annotations.Unmodifiable;
 import org.jetbrains.annotations.UnmodifiableView;
 
 import java.io.IOException;
@@ -41,13 +40,11 @@ import java.util.*;
  */
 public final class YsmParserV3 implements YsmParser {
 
-    private static final Gson GSON_COMPACT = new GsonBuilder().disableHtmlEscaping().create();
-    private static final Gson GSON_PRETTY = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 
     private final byte @NotNull [] buffer;
 
     private int formatVersion;
-    private byte @Nullable [] decryptedData;
     private byte @Nullable [] decompressedData;
 
     private final @NotNull Map<@NotNull String, @NotNull String> subEntityCategories = new LinkedHashMap<>();
@@ -64,8 +61,6 @@ public final class YsmParserV3 implements YsmParser {
     private byte @Nullable [] infoJsonFile;
     private byte @Nullable [] ysmJsonFile;
 
-    private boolean formatJson = false;
-
     /**
      * Constructs a parser for YSM V3 model bytes.
      *
@@ -74,21 +69,6 @@ public final class YsmParserV3 implements YsmParser {
     public YsmParserV3(byte @NotNull [] buffer) {
         this.buffer = Objects.requireNonNull(buffer, "buffer must not be null");
     }
-
-    /**
-     * Sets whether extracted JSON files should be pretty-printed.
-     *
-     * @param formatJson true to pretty-print, false for compact
-     */
-    public void setFormatJson(boolean formatJson) {
-        this.formatJson = formatJson;
-    }
-
-    private Gson getGson() {
-        return formatJson ? GSON_PRETTY : GSON_COMPACT;
-    }
-
-    private final @NotNull List<@NotNull String> warnings = new ArrayList<>();
 
     @Override
     public int getYSGPVersion() {
@@ -118,18 +98,13 @@ public final class YsmParserV3 implements YsmParser {
     }
 
     @Override
-    public @NotNull @Unmodifiable List<@NotNull String> getWarnings() {
-        return Collections.unmodifiableList(warnings);
-    }
-
-    @Override
     public byte @NotNull [] getDecryptedData() {
         return decompressedData != null ? decompressedData : new byte[0];
     }
 
     @Override
     public void parse() throws IOException {
-        if (buffer == null || buffer.length < 8 + 24 + 32 + 8) {
+        if (buffer.length < 8 + 24 + 32 + 8) {
             throw new IllegalArgumentException("File too small to be a valid YSM V3 file");
         }
 
@@ -188,7 +163,7 @@ public final class YsmParserV3 implements YsmParser {
 
         int n = ((xorredData[0] & 0xFF) | ((xorredData[1] & 0xFF) << 8)) & 0x3FF;
         int trueDataOffset = 2 + n;
-        decryptedData = Arrays.copyOfRange(xorredData, trueDataOffset, xorredData.length);
+        byte @Nullable [] decryptedData = Arrays.copyOfRange(xorredData, trueDataOffset, xorredData.length);
 
         // Decompress
         decompressedData = ZstdDecompressor.decompress(decryptedData);
@@ -456,7 +431,7 @@ public final class YsmParserV3 implements YsmParser {
         parseYsmJson(reader);
     }
 
-    private void parseSubEntity(BufferReader reader, String categoryName) throws IOException {
+    private void parseSubEntity(BufferReader reader, String categoryName) {
         String subModuleName = "";
         if (formatVersion <= 26) {
             subModuleName = reader.readString();
@@ -592,7 +567,7 @@ public final class YsmParserV3 implements YsmParser {
                 String nodeValue = reader.readString();
                 nodesData.addProperty(nodeName, nodeValue);
             }
-            languageFiles.put(name, getGson().toJson(nodesData).getBytes(StandardCharsets.UTF_8));
+            languageFiles.put(name, GSON.toJson(nodesData).getBytes(StandardCharsets.UTF_8));
         }
     }
 
@@ -710,10 +685,10 @@ public final class YsmParserV3 implements YsmParser {
         }
 
         if (channel.bone().size() == 1
-                && Math.abs(channel.bone().get(0).getKey()) < 1e-6f
-                && channel.bone().get(0).getValue().pre() == null
-                && channel.bone().get(0).getValue().lerpMode() == 0) {
-            return molangToJson(channel.bone().get(0).getValue().post());
+                && Math.abs(channel.bone().getFirst().getKey()) < 1e-6f
+                && channel.bone().getFirst().getValue().pre() == null
+                && channel.bone().getFirst().getValue().lerpMode() == 0) {
+            return molangToJson(channel.bone().getFirst().getValue().post());
         }
 
         var keyframes = new JsonObject();
@@ -867,7 +842,7 @@ public final class YsmParserV3 implements YsmParser {
             root.add("animations", animationsDesc);
         }
 
-        return getGson().toJson(root).getBytes(StandardCharsets.UTF_8);
+        return GSON.toJson(root).getBytes(StandardCharsets.UTF_8);
     }
 
     private byte[] parseAnimationControllers(BufferReader reader) {
@@ -981,10 +956,10 @@ public final class YsmParserV3 implements YsmParser {
         }
 
         root.add("animation_controllers", controllers);
-        return getGson().toJson(root).getBytes(StandardCharsets.UTF_8);
+        return GSON.toJson(root).getBytes(StandardCharsets.UTF_8);
     }
 
-    private byte[] parseModels(BufferReader reader) throws IOException {
+    private byte[] parseModels(BufferReader reader) {
         if (formatVersion > 15) {
             reader.readString(); // sha256
         }
@@ -1051,8 +1026,8 @@ public final class YsmParserV3 implements YsmParser {
             offsetList.add(reader.readFloat());
         }
 
-        float scaleX = reader.readFloat();
-        float scaleY = reader.readFloat();
+        reader.readFloat(); //scale X
+        reader.readFloat(); //scale Y
 
         long hasInfoJson = reader.readVarint();
         if (hasInfoJson > 0) {
@@ -1168,7 +1143,7 @@ public final class YsmParserV3 implements YsmParser {
         geomArr.add(outGeom);
         finalOutput.add("minecraft:geometry", geomArr);
 
-        return getGson().toJson(finalOutput).getBytes(StandardCharsets.UTF_8);
+        return GSON.toJson(finalOutput).getBytes(StandardCharsets.UTF_8);
     }
 
     private void parseLegacyYSMInfo(BufferReader reader) {
@@ -1198,7 +1173,7 @@ public final class YsmParserV3 implements YsmParser {
         j.add("extra_animation_names", jinfoExtra);
         j.addProperty("free", infoFree);
 
-        infoJsonFile = getGson().toJson(j).getBytes(StandardCharsets.UTF_8);
+        infoJsonFile = GSON.toJson(j).getBytes(StandardCharsets.UTF_8);
     }
 
     private void parseYsmJson(BufferReader reader) {
@@ -1414,7 +1389,7 @@ public final class YsmParserV3 implements YsmParser {
         root.add("files", buildFilesFromParsedData());
 
         cleanJsonFloats(root);
-        ysmJsonFile = getGson().toJson(root).getBytes(StandardCharsets.UTF_8);
+        ysmJsonFile = GSON.toJson(root).getBytes(StandardCharsets.UTF_8);
 
         if (formatVersion <= 15) {
             return;
@@ -1661,7 +1636,7 @@ public final class YsmParserV3 implements YsmParser {
                 Path target = PathSanitizer.safeResolve(outputDirectory, "info.json");
                 PathSanitizer.writeSafe(target, infoJsonFile);
             }
-        } else if (ysmJsonFile != null && ysmJsonFile.length > 0) {
+        } else {
             Path target = PathSanitizer.safeResolve(outputDirectory, "ysm.json");
             PathSanitizer.writeSafe(target, ysmJsonFile);
         }
@@ -1672,8 +1647,8 @@ public final class YsmParserV3 implements YsmParser {
         exportMapped(outputDirectory, useLegacyRootLayout, animControllerFiles, "controller", ".json");
         exportMapped(outputDirectory, useLegacyRootLayout, modelFiles, "models", ".json");
         exportMapped(outputDirectory, useLegacyRootLayout, animationFiles, "animations", ".animation.json");
-        exportImageMapped(outputDirectory, useLegacyRootLayout, textureFiles, "textures");
-        exportImageMapped(outputDirectory, useLegacyRootLayout, specialImageFiles, "textures");
+        exportImageMapped(outputDirectory, useLegacyRootLayout, textureFiles);
+        exportImageMapped(outputDirectory, useLegacyRootLayout, specialImageFiles);
 
         for (var entry : avatarFiles.entrySet()) {
             String filename = ImageFormat.resolveImageFilename(entry.getKey(), entry.getValue(), ".png");
@@ -1720,8 +1695,7 @@ public final class YsmParserV3 implements YsmParser {
     private void exportImageMapped(
             Path outputDirectory,
             boolean useLegacyRootLayout,
-            Map<String, byte[]> items,
-            String defaultFolder
+            Map<String, byte[]> items
     ) throws IOException {
         for (var entry : items.entrySet()) {
             String rawPath = ImageFormat.resolveImageFilename(entry.getKey(), entry.getValue(), ".png");
@@ -1729,7 +1703,7 @@ public final class YsmParserV3 implements YsmParser {
             String safeFilename = PathSanitizer.sanitizeWindowsFilename(p.getFileName().toString());
             Path parent = p.getParent();
             String safeRel = (parent != null ? parent.toString().replace('\\', '/') + "/" : "") + safeFilename;
-            String finalRel = useLegacyRootLayout ? safeFilename : (defaultFolder + "/" + safeRel);
+            String finalRel = useLegacyRootLayout ? safeFilename : ("textures" + "/" + safeRel);
             Path target = PathSanitizer.safeResolve(outputDirectory, finalRel);
             PathSanitizer.writeSafe(target, entry.getValue());
         }
@@ -1744,7 +1718,7 @@ public final class YsmParserV3 implements YsmParser {
             if (infoJsonFile != null && infoJsonFile.length > 0) {
                 map.put("info.json", infoJsonFile);
             }
-        } else if (ysmJsonFile != null && ysmJsonFile.length > 0) {
+        } else {
             map.put("ysm.json", ysmJsonFile);
         }
 

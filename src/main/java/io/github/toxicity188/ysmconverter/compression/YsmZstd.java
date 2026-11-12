@@ -35,12 +35,12 @@ public final class YsmZstd {
         else if (dictIdBits == 2) dictIdSize = 2;
         else if (dictIdBits == 3) dictIdSize = 4;
 
-        int fcsSize = 0;
+        int fcsSize;
         int fcsBits = (fhd >>> 6) & 3;
         if (fcsBits == 0) fcsSize = singleSegment ? 1 : 0;
         else if (fcsBits == 1) fcsSize = 2;
         else if (fcsBits == 2) fcsSize = 4;
-        else if (fcsBits == 3) fcsSize = 8;
+        else fcsSize = 8;
 
         int windowDescSize = singleSegment ? 0 : 1;
         return size + windowDescSize + dictIdSize + fcsSize;
@@ -55,7 +55,7 @@ public final class YsmZstd {
      */
     @CheckReturnValue
     public static byte @NotNull [] wash(byte @NotNull [] compressedData) {
-        if (compressedData == null || compressedData.length < 5) {
+        if (compressedData.length < 5) {
             throw new IllegalArgumentException("Invalid data length for ZSTD wash");
         }
 
@@ -118,7 +118,7 @@ public final class YsmZstd {
      */
     @CheckReturnValue
     public static byte @NotNull [] obfuscate(byte @NotNull [] standardData) {
-        if (standardData == null || standardData.length < 5) {
+        if (standardData.length < 5) {
             throw new IllegalArgumentException("Invalid data length for ZSTD obfuscate");
         }
 

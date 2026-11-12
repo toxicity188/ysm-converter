@@ -187,7 +187,7 @@ final class BlockbenchGeometry {
         var array = new JsonArray();
         for (var value : values) {
             if (!Double.isFinite(value)) throw new IllegalArgumentException("Non-finite coordinate");
-            array.add(value == 0 ? 0 : value);
+            array.add(value);
         }
         return array;
     }

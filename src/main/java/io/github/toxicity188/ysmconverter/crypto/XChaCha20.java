@@ -83,7 +83,6 @@ public final class XChaCha20 {
         int j8 = input[8], j9 = input[9], j10 = input[10], j11 = input[11];
         int j12 = input[12], j13 = input[13], j14 = input[14], j15 = input[15];
 
-        var tmp = new byte[64];
         var outBuf = new byte[64];
 
         int currIn = inOffset;

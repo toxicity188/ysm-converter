@@ -18,24 +18,9 @@ public final class CryptoSeeds {
     public static final long SEED_RES_VERIFICATION = 0xA62B1A2C43842BC3L;
 
     /**
-     * Seed used for cached model decryption.
-     */
-    public static final long SEED_CACHE_DECRYPTION = 0xD1C3D1D13A99752BL;
-
-    /**
      * Seed used for whole file integrity verification.
      */
     public static final long SEED_FILE_VERIFICATION = 0x9E5599DB80C67C29L;
-
-    /**
-     * Seed used for packet integrity verification.
-     */
-    public static final long SEED_PACKET_VERIFICATION = 0xEE6FA63D570BD77BL;
-
-    /**
-     * Seed used for cache integrity verification.
-     */
-    public static final long SEED_CACHE_VERIFICATION = 0xF346451E53A22261L;
 
     private CryptoSeeds() {
     }

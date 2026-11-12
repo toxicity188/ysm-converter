@@ -29,7 +29,7 @@ public final class VersionDetector {
      */
     @CheckReturnValue
     public static @NotNull YsmVersion detectVersion(byte @NotNull [] data) {
-        if (data == null || data.length < 8) {
+        if (data.length < 8) {
             throw new IllegalArgumentException("Invalid YSM file format: size must be at least 8 bytes");
         }
 

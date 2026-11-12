@@ -47,17 +47,6 @@ public final class GeometrySolver {
         return Math.round(v * 100000.0f) / 100000.0f;
     }
 
-    /**
-     * Cleans a 3D vector by cleaning each component.
-     *
-     * @param v vector
-     * @return cleaned vector
-     */
-    @CheckReturnValue
-    public static @NotNull Vector3D cleanVector(@NotNull Vector3D v) {
-        return new Vector3D(cleanNumber(v.x()), cleanNumber(v.y()), cleanNumber(v.z()));
-    }
-
     private static UvDirs getExpectedUvDirs(Vector3D localNormal) {
         var n = localNormal.round();
         if (n.x() == -1) return new UvDirs(new Vector3D(0, 0, 1), new Vector3D(0, -1, 0));
@@ -104,9 +93,6 @@ public final class GeometrySolver {
             int textureWidth,
             int textureHeight
     ) {
-        var comp = Comparator.<Vector3D>comparingDouble(Vector3D::x)
-                .thenComparingDouble(Vector3D::y)
-                .thenComparingDouble(Vector3D::z);
         var uniquePts = new TreeSet<Vector3D>((a, b) -> {
             if (Math.abs(a.x() - b.x()) >= 1e-4f) return Float.compare(a.x(), b.x());
             if (Math.abs(a.y() - b.y()) >= 1e-4f) return Float.compare(a.y(), b.y());
@@ -171,7 +157,7 @@ public final class GeometrySolver {
         }
 
         if (rawAxes.size() == 1) {
-            var n = rawAxes.get(0);
+            var n = rawAxes.getFirst();
             var temp = Math.abs(n.x()) < 0.9f ? new Vector3D(1, 0, 0) : new Vector3D(0, 1, 0);
             var u = n.cross(temp).normalize();
             rawAxes.add(u);
