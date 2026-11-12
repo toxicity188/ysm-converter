@@ -1,6 +1,7 @@
 package io.github.toxicity188.ysmconverter.blockbench;
 
 import com.google.gson.JsonParser;
+import io.github.toxicity188.ysmconverter.parser.ImageEncoder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -28,7 +29,7 @@ class BlockbenchConverterTest {
                   {"origin":[0,0,0],"size":[2,3,4],"uv":{"north":{"uv":[10,20],"uv_size":[-2,3]},"up":{"uv":[1,2],"uv_size":[2,4]},"down":{"uv":[3,4],"uv_size":[2,-4],"uv_rotation":90}}}
                 ]},{"name":"root","pivot":[0,0,0]}
                 """);
-        var result = BlockbenchConverter.convert(resources);
+        var result = BlockbenchConverter.convertWithWarnings(resources);
         var root = result.model().getAsJsonArray("outliner").get(0).getAsJsonObject();
         var child = root.getAsJsonArray("children").get(0).getAsJsonObject();
         assertEquals("root", root.get("name").getAsString());
@@ -65,7 +66,7 @@ class BlockbenchConverterTest {
                   "rotation":["query.head_x_rotation",2,3],"scale":1.5
                 }},"timeline":{"0.2":["v.a=1;","v.b=2;"]}}}}
                 """);
-        var model = BlockbenchConverter.convert(resources);
+        var model = BlockbenchConverter.convertWithWarnings(resources);
         var animation = model.model().getAsJsonArray("animations").get(0).getAsJsonObject();
         assertEquals("hold", animation.get("loop").getAsString());
         assertEquals(1.5, animation.get("length").getAsDouble());
@@ -94,7 +95,7 @@ class BlockbenchConverterTest {
                 """);
         put(resources, "animations/player.json", "{\"animations\":{\"idle\":{\"bones\":{\"body\":{\"rotation\":[0,0,0]}}}}}");
         put(resources, "unused.json", "invalid unused document");
-        var result = BlockbenchConverter.convert(resources);
+        var result = BlockbenchConverter.convertWithWarnings(resources);
         assertEquals(1, result.model().getAsJsonArray("textures").size());
         assertEquals(1, result.model().getAsJsonArray("animations").size());
         assertTrue(result.warnings().stream().anyMatch(w -> w.contains("Auxiliary")));
@@ -111,10 +112,10 @@ class BlockbenchConverterTest {
         put(resources, "arm.json", "invalid");
         put(resources, "original.bbmodel", "invalid");
         resources.put("arrow.png", new byte[]{1});
-        var result = BlockbenchConverter.convert(resources);
+        var result = BlockbenchConverter.convertWithWarnings(resources);
         assertEquals(1, result.model().getAsJsonArray("animations").size());
         assertEquals(1, result.model().getAsJsonArray("textures").size());
-        assertEquals(result.model(), BlockbenchConverter.convert(resources).model());
+        assertEquals(result.model(), BlockbenchConverter.convert(resources));
     }
 
     @Test
@@ -135,7 +136,7 @@ class BlockbenchConverterTest {
         var input = resources("{\"name\":\"root\"}");
         put(input, "main.json", "{\"format_version\":\"1.8.0\",\"geometry.test\":{\"texturewidth\":32,\"textureheight\":16,\"bones\":[{\"name\":\"root\"}]}}");
         var result = BlockbenchConverter.convert(input);
-        assertJson("{\"width\":32,\"height\":16}", result.model().get("resolution"));
+        assertJson("{\"width\":32,\"height\":16}", result.getAsJsonObject().get("resolution"));
     }
 
     @Test
@@ -144,7 +145,7 @@ class BlockbenchConverterTest {
                 {"name":"body","cubes":[{"origin":[1,2,3],"size":[2,-0.2,-0.3],
                 "uv":{"north":{"uv":[1,2],"uv_size":[2,0.2]}}}]}
                 """);
-        var cube = BlockbenchConverter.convert(input).model().getAsJsonArray("elements").get(0).getAsJsonObject();
+        var cube = BlockbenchConverter.convert(input).getAsJsonObject().getAsJsonArray("elements").get(0).getAsJsonObject();
         assertJson("[-3,2,3]", cube.get("from"));
         assertJson("[-1,1.8,2.7]", cube.get("to"));
     }
@@ -156,6 +157,30 @@ class BlockbenchConverterTest {
         assertThrows(IOException.class, () -> BlockbenchConverter.convert(input));
         put(input, "main.json", "{ broken");
         assertThrows(IOException.class, () -> BlockbenchConverter.convert(input));
+    }
+
+    @Test
+    void memoryConversionDoesNotUseImageIoDiskCache() throws IOException {
+        var input = resources("{\"name\":\"root\"}");
+        var expected = BlockbenchConverter.convert(input);
+        var oldCache = ImageIO.getCacheDirectory();
+        var oldUseCache = ImageIO.getUseCache();
+        var cache = Files.createDirectory(temporary.resolve("image-cache"));
+        try {
+            ImageIO.setCacheDirectory(cache.toFile());
+            ImageIO.setUseCache(true);
+            // A disk-cached ImageIO stream now fails; memory streams must still work.
+            Files.delete(cache);
+            assertEquals(expected, BlockbenchConverter.convert(input));
+            var png = ImageEncoder.encodeRgbaToPng(new byte[]{1, 2, 3, (byte) 255}, 1, 1);
+            assertTrue(png.length > 8);
+            assertTrue(ImageIO.getUseCache(), "Conversion must not change global cache settings");
+            assertEquals(cache.toFile(), ImageIO.getCacheDirectory());
+            assertFalse(Files.exists(cache));
+        } finally {
+            ImageIO.setCacheDirectory(oldCache);
+            ImageIO.setUseCache(oldUseCache);
+        }
     }
 
     private static Map<String, byte[]> resources(String bones) throws IOException {

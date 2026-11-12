@@ -4,6 +4,7 @@ import org.jetbrains.annotations.CheckReturnValue;
 import org.jetbrains.annotations.NotNull;
 
 import javax.imageio.ImageIO;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -50,7 +51,9 @@ public final class ImageEncoder {
         image.setRGB(0, 0, width, height, argb, 0, width);
 
         var baos = new ByteArrayOutputStream();
-        ImageIO.write(image, "PNG", baos);
+        try (var output = new MemoryCacheImageOutputStream(baos)) {
+            ImageIO.write(image, "PNG", output);
+        }
         return baos.toByteArray();
     }
 }

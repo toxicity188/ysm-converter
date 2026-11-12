@@ -7,18 +7,20 @@ import org.jetbrains.annotations.CheckReturnValue;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
- * Main public entry point for converting and extracting YSM model files.
+ * Main public entry point for in-memory YSM decryption and optional resource extraction.
  *
  * <pre>{@code
- * YsmParseResult result = YsmConverter.parse(Path.of("model.ysm"), Path.of("output"));
- * System.out.println("Extracted " + result.resourceCount() + " resources.");
+ * var result = YsmConverter.parse(inputStream);
+ * System.out.println("Decoded " + result.resources().size() + " resources.");
  * }</pre>
  *
  * @since 1.0.0
@@ -26,6 +28,109 @@ import java.util.Objects;
 public final class YsmConverter {
 
     private YsmConverter() {
+    }
+
+    /**
+     * Decrypts and parses bytes entirely in memory. For example, {@code decrypt(ysmBytes)}.
+     * Use {@link #parse(byte[])} when version information and warnings are also needed.
+     *
+     * @param ysmData encrypted YSM bytes
+     * @return resource names mapped to their decrypted contents; map structure is unmodifiable
+     * @throws IOException if decryption or parsing fails
+     * @throws IllegalArgumentException if the header or parsed data is malformed
+     * @throws UnsupportedOperationException if the format version is unsupported
+     * @since 1.0.0
+     */
+    @CheckReturnValue
+    public static @NotNull Map<String, byte[]> decrypt(byte @NotNull [] ysmData) throws IOException {
+        return parse(ysmData).resources();
+    }
+
+    /**
+     * Reads and decrypts a stream in memory without closing it. For example, {@code decrypt(input)}.
+     *
+     * @param input caller-owned stream, read from its current position to EOF
+     * @return decrypted resource map
+     * @throws IOException if reading, decryption or parsing fails
+     * @throws IllegalArgumentException if the header or parsed data is malformed
+     * @throws UnsupportedOperationException if the format version is unsupported
+     * @since 1.0.0
+     */
+    @CheckReturnValue
+    public static @NotNull Map<String, byte[]> decrypt(@NotNull InputStream input) throws IOException {
+        return parse(input).resources();
+    }
+
+    /**
+     * Reads a YSM file and returns resources without extracting files.
+     * For example, {@code decrypt(Path.of("model.ysm"))}.
+     *
+     * @param path encrypted YSM file
+     * @return decrypted resource map
+     * @throws IOException if reading, decryption or parsing fails
+     * @throws IllegalArgumentException if the header or parsed data is malformed
+     * @throws UnsupportedOperationException if the format version is unsupported
+     * @since 1.0.0
+     */
+    @CheckReturnValue
+    public static @NotNull Map<String, byte[]> decrypt(@NotNull Path path) throws IOException {
+        return parse(path).resources();
+    }
+
+    /**
+     * Decrypts and parses bytes in memory, retaining version information and warnings.
+     * For example, {@code var resources = parse(ysmBytes).resources()}.
+     *
+     * @param ysmData encrypted YSM bytes
+     * @return resources and parsing metadata, without any extracted paths
+     * @throws IOException if decryption or parsing fails
+     * @throws IllegalArgumentException if the header or parsed data is malformed
+     * @throws UnsupportedOperationException if the format version is unsupported
+     * @since 1.0.0
+     */
+    @CheckReturnValue
+    public static @NotNull YsmResourceResult parse(byte @NotNull [] ysmData) throws IOException {
+        Objects.requireNonNull(ysmData, "ysmData must not be null");
+        var version = VersionDetector.detectVersion(ysmData);
+        var parser = YsmParserFactory.create(version, ysmData);
+        parser.parse();
+        return new YsmResourceResult(version, parser.getFormatVersion(), parser.getExtractedResources(), parser.getWarnings());
+    }
+
+    /**
+     * Parses a stream in memory without closing it, on either success or failure.
+     * For example, {@code var result = parse(input)}.
+     *
+     * @param input caller-owned stream, read from its current position to EOF
+     * @return resources, version information and warnings
+     * @throws IOException if reading, decryption or parsing fails
+     * @throws IllegalArgumentException if the header or parsed data is malformed
+     * @throws UnsupportedOperationException if the format version is unsupported
+     * @since 1.0.0
+     */
+    @CheckReturnValue
+    public static @NotNull YsmResourceResult parse(@NotNull InputStream input) throws IOException {
+        Objects.requireNonNull(input, "input must not be null");
+        return parse(input.readAllBytes());
+    }
+
+    /**
+     * Reads a YSM file through the memory API and closes the input stream.
+     * For example, {@code var result = parse(Path.of("model.ysm"))}.
+     *
+     * @param path encrypted YSM file
+     * @return resources, version information and warnings; no files are written
+     * @throws IOException if reading, decryption or parsing fails
+     * @throws IllegalArgumentException if the header or parsed data is malformed
+     * @throws UnsupportedOperationException if the format version is unsupported
+     * @since 1.0.0
+     */
+    @CheckReturnValue
+    public static @NotNull YsmResourceResult parse(@NotNull Path path) throws IOException {
+        Objects.requireNonNull(path, "path must not be null");
+        try (var input = Files.newInputStream(path)) {
+            return parse(input);
+        }
     }
 
     /**
@@ -40,8 +145,7 @@ public final class YsmConverter {
     public static @NotNull YsmParseResult parse(@NotNull Path ysmFilePath, @NotNull Path outputDir) throws IOException {
         Objects.requireNonNull(ysmFilePath, "ysmFilePath must not be null");
         Objects.requireNonNull(outputDir, "outputDir must not be null");
-        var data = Files.readAllBytes(ysmFilePath);
-        return parse(data, outputDir);
+        return extract(parse(ysmFilePath), outputDir);
     }
 
     /**
@@ -57,22 +161,23 @@ public final class YsmConverter {
         Objects.requireNonNull(ysmData, "ysmData must not be null");
         Objects.requireNonNull(outputDir, "outputDir must not be null");
 
-        var version = VersionDetector.detectVersion(ysmData);
-        var parser = YsmParserFactory.create(version, ysmData);
-        parser.parse();
-        parser.saveToDirectory(outputDir);
+        return extract(parse(ysmData), outputDir);
+    }
 
+    private static YsmParseResult extract(YsmResourceResult result, Path outputDir) throws IOException {
         var extractedFiles = new ArrayList<Path>();
-        for (var key : parser.getExtractedResources().keySet()) {
-            extractedFiles.add(PathSanitizer.safeResolve(outputDir, key));
+        for (var resource : result.resources().entrySet()) {
+            var path = PathSanitizer.safeResolve(outputDir, resource.getKey());
+            PathSanitizer.writeSafe(path, resource.getValue());
+            extractedFiles.add(path);
         }
 
         return new YsmParseResult(
-                version,
-                parser.getFormatVersion(),
+                result.version(),
+                result.formatVersion(),
                 extractedFiles.size(),
                 List.copyOf(extractedFiles),
-                List.copyOf(parser.getWarnings())
+                result.warnings()
         );
     }
 

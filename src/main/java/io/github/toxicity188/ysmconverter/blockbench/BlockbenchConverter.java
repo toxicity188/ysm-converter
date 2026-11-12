@@ -9,6 +9,9 @@ import org.jetbrains.annotations.CheckReturnValue;
 import org.jetbrains.annotations.NotNull;
 
 import javax.imageio.ImageIO;
+import javax.imageio.stream.MemoryCacheImageInputStream;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -33,10 +36,8 @@ import static io.github.toxicity188.ysmconverter.blockbench.BlockbenchGeometry.*
  * are never used as conversion input. Runtime controllers and YSM-specific Molang queries
  * cannot be reproduced without the game runtime; diagnostics describe these limitations.
  * <pre>{@code
- * var parser = YsmParser.of(Path.of("model.ysm"));
- * parser.parse();
- * var result = BlockbenchConverter.convert(parser.getExtractedResources());
- * result.write(Path.of("output/model.bbmodel"));
+ * var resources = YsmConverter.decrypt(inputStream);
+ * JsonElement model = BlockbenchConverter.convert(resources);
  * }</pre>
  *
  * @since 1.0.0
@@ -63,7 +64,7 @@ public final class BlockbenchConverter {
                 if (name.endsWith(".json") || image(name)) resources.put(name, Files.readAllBytes(file));
             }
         }
-        var result = convert(resources);
+        var result = convertWithWarnings(resources);
         result.model().addProperty("name", directory.toAbsolutePath().getFileName().toString());
         return result;
     }
@@ -79,7 +80,22 @@ public final class BlockbenchConverter {
      * @since 1.0.0
      */
     @CheckReturnValue
-    public static @NotNull BlockbenchResult convert(@NotNull Map<String, byte[]> resources) throws IOException {
+    public static @NotNull JsonElement convert(@NotNull Map<String, byte[]> resources) throws IOException {
+        return convertWithWarnings(resources).model();
+    }
+
+    /**
+     * Converts resources entirely in memory while retaining conversion diagnostics.
+     * For example, {@code var result = BlockbenchConverter.convertWithWarnings(resources)}.
+     * No temporary image cache files are created, regardless of global ImageIO cache settings.
+     *
+     * @param resources relative resource paths and their contents
+     * @return editable project and warnings about unsupported runtime features
+     * @throws IOException if resources are invalid, unsupported or cannot be decoded
+     * @since 1.0.0
+     */
+    @CheckReturnValue
+    public static @NotNull BlockbenchResult convertWithWarnings(@NotNull Map<String, byte[]> resources) throws IOException {
         try {
             return new Conversion(resources).convert();
         } catch (JsonParseException | IllegalArgumentException | IllegalStateException | NullPointerException | IndexOutOfBoundsException exception) {
@@ -196,10 +212,22 @@ public final class BlockbenchConverter {
             var result = new JsonArray();
             for (var name : ordered) {
                 var bytes = resource(name);
-                var image = ImageIO.read(new ByteArrayInputStream(bytes));
-                if (image == null) throw new IOException("Cannot decode player texture: " + name);
                 var png = new ByteArrayOutputStream();
-                if (!ImageIO.write(image, "PNG", png)) throw new IOException("PNG encoder unavailable");
+                BufferedImage image;
+                // Explicit memory streams avoid ImageIO's default disk cache without changing global settings.
+                try (var input = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes));
+                     var output = new MemoryCacheImageOutputStream(png)) {
+                    var readers = ImageIO.getImageReaders(input);
+                    if (!readers.hasNext()) throw new IOException("Cannot decode player texture: " + name);
+                    var reader = readers.next();
+                    try {
+                        reader.setInput(input);
+                        image = reader.read(0);
+                    } finally {
+                        reader.dispose();
+                    }
+                    if (!ImageIO.write(image, "PNG", output)) throw new IOException("PNG encoder unavailable");
+                }
                 var texture = new JsonObject();
                 texture.addProperty("name", name.substring(name.lastIndexOf('/') + 1));
                 texture.addProperty("id", String.valueOf(result.size()));

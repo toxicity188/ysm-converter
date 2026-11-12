@@ -1,18 +1,18 @@
 ## Blockbench conversion
 
-Convert resources already extracted by the Java API into a self-contained, editable `.bbmodel`:
+Decrypt and convert an encrypted YSM stream entirely in memory:
 
 ```java
-var parser = YsmParser.of(Path.of("model.ysm"));
-parser.parse();
-var result = BlockbenchConverter.convert(parser.getExtractedResources());
-result.write(Path.of("output/model.bbmodel"));
-result.warnings().forEach(System.out::println);
+Map<String, byte[]> resources = YsmConverter.decrypt(inputStream);
+JsonElement model = BlockbenchConverter.convert(resources);
 ```
 
-Use `io.github.toxicity188.ysmconverter.parser.YsmParser`,
-`io.github.toxicity188.ysmconverter.blockbench.BlockbenchConverter`, and `java.nio.file.Path`.
-An extracted directory can also be passed to `BlockbenchConverter.convert(Path)`.
+Use `io.github.toxicity188.ysmconverter.api.YsmConverter`,
+`io.github.toxicity188.ysmconverter.blockbench.BlockbenchConverter`, `java.util.Map`, and `com.google.gson.JsonElement`.
+`decrypt` accepts `InputStream`, `byte[]`, or `Path`. Caller-owned streams remain open.
+Use `YsmConverter.parse(input)` to receive `YsmResourceResult` with resources, version information and parsing warnings.
+Use `BlockbenchConverter.convertWithWarnings(resources)` for conversion warnings and optional `.write(Path)` output.
+Existing `YsmConverter.parse(input, outputDirectory)` and `BlockbenchConverter.convert(Path)` convenience methods remain available.
 Only third-person player geometry is converted; arm resources, projectile models and TAC animations are excluded.
 See [conversion rules and verification](docs/blockbench-conversion.md) for supported data and limitations.
 
