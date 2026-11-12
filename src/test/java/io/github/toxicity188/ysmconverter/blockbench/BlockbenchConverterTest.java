@@ -183,6 +183,107 @@ class BlockbenchConverterTest {
         }
     }
 
+    @Test
+    void infersSingleNormalNamedSkinAndPreservesExistingLegacySelection() throws IOException {
+        var input = resources("{\"name\":\"root\",\"cubes\":[{\"size\":[2,3,4],\"uv\":[0,0]}]}");
+        var original = BlockbenchConverter.convert(input);
+        input.put("costume_normal.png", input.get("skin.png"));
+        assertEquals(original, BlockbenchConverter.convert(input));
+        input.remove("skin.png");
+        var result = BlockbenchConverter.convertWithWarnings(input);
+        assertEquals("costume_normal.png", result.model().getAsJsonArray("textures").get(0).getAsJsonObject().get("name").getAsString());
+        assertTrue(result.warnings().stream().anyMatch(w -> w.contains("Texture fallback selected")));
+        assertEquals(original.getAsJsonObject().get("elements"), result.model().get("elements"));
+    }
+
+    @Test
+    void invalidReferencesUseFallbackButValidExplicitTexturesRemainUnchanged() throws IOException {
+        var input = resources("{\"name\":\"root\"}");
+        put(input, "ysm.json", """
+                {"files":{"player":{"model":{"main":"main.json"},"texture":"skin.png"}}}
+                """);
+        var expected = BlockbenchConverter.convert(input);
+        input.put("textures/other.png", input.get("skin.png"));
+        assertEquals(expected, BlockbenchConverter.convert(input));
+        input.put("textures/skin.png", input.remove("skin.png"));
+        // A same-basename image is stronger evidence than another equally sized atlas.
+        var result = BlockbenchConverter.convertWithWarnings(input);
+        assertEquals("skin.png", result.model().getAsJsonArray("textures").get(0).getAsJsonObject().get("name").getAsString());
+        assertTrue(result.warnings().stream().anyMatch(w -> w.contains("Invalid player texture")));
+        input.put("skin.png", new byte[]{1, 2, 3});
+        assertEquals(result.model(), BlockbenchConverter.convert(input));
+    }
+
+    @Test
+    void fallbackUsesDimensionsNamesAndPathsWithoutDependingOnMapOrder() throws IOException {
+        var input = resources("{\"name\":\"root\"}");
+        var png = input.remove("skin.png");
+        input.put("assets/a.png", png);
+        input.put("textures/body.png", png);
+        var result = BlockbenchConverter.convertWithWarnings(input);
+        assertEquals("body.png", result.model().getAsJsonArray("textures").get(0).getAsJsonObject().get("name").getAsString());
+        input.put("assets/albedo.png", png);
+        assertEquals("albedo.png", BlockbenchConverter.convert(input).getAsJsonObject().getAsJsonArray("textures").get(0).getAsJsonObject().get("name").getAsString());
+        input.remove("assets/albedo.png");
+        input.remove("textures/body.png");
+        var bytes = new ByteArrayOutputStream();
+        ImageIO.write(new BufferedImage(16, 8, BufferedImage.TYPE_INT_ARGB), "PNG", bytes);
+        input.put("assets/b.png", bytes.toByteArray());
+        input.put("arm/skin.png", png);
+        input.put("preview/skin.png", png);
+        var expected = BlockbenchConverter.convert(input);
+        assertEquals("a.png", expected.getAsJsonObject().getAsJsonArray("textures").get(0).getAsJsonObject().get("name").getAsString());
+        var reversed = new LinkedHashMap<String, byte[]>();
+        input.entrySet().stream().sorted(Map.Entry.<String, byte[]>comparingByKey().reversed()).forEach(e -> reversed.put(e.getKey(), e.getValue()));
+        assertEquals(expected, BlockbenchConverter.convert(reversed));
+    }
+
+    @Test
+    void ambiguousFallbackLeavesVisibleFacesUnassignedAndHiddenFacesHidden() throws IOException {
+        var input = resources("""
+                {"name":"root","cubes":[{"size":[2,3,4],"uv":{"north":{"uv":[0,0],"uv_size":[2,3]}}}]}
+                """);
+        var png = input.remove("skin.png");
+        input.put("assets/a.png", png);
+        input.put("assets/b.png", png);
+        var result = BlockbenchConverter.convertWithWarnings(input);
+        assertTrue(result.model().getAsJsonArray("textures").isEmpty());
+        assertTrue(result.warnings().stream().anyMatch(w -> w.contains("ambiguous image evidence")));
+        var faces = result.model().getAsJsonArray("elements").get(0).getAsJsonObject().getAsJsonObject("faces");
+        assertFalse(faces.getAsJsonObject("north").get("texture").getAsBoolean());
+        assertTrue(faces.getAsJsonObject("south").get("texture").isJsonNull());
+    }
+
+    @Test
+    void fallbackRejectsOutOfAtlasUvAndNeverUsesExplicitAuxiliaryMaps() throws IOException {
+        var input = resources("{\"name\":\"root\",\"cubes\":[{\"size\":[2,3,4],\"uv\":[30,30]}]}");
+        input.put("textures/skin.png", input.remove("skin.png"));
+        var result = BlockbenchConverter.convertWithWarnings(input);
+        assertTrue(result.model().getAsJsonArray("textures").isEmpty());
+        assertTrue(result.warnings().stream().anyMatch(w -> w.contains("UVs exceed")));
+        put(input, "ysm.json", """
+                {"files":{"player":{"model":{"main":"main.json"},"texture":{"uv":"missing.png","normal":"textures/skin.png"}}}}
+                """);
+        assertThrows(IOException.class, () -> BlockbenchConverter.convert(input));
+    }
+
+    @Test
+    void fallbackSupportsScaledAtlasesAndPrefersExactDimensionsWhenOtherwiseEqual() throws IOException {
+        var input = resources("{\"name\":\"root\"}");
+        var original = input.remove("skin.png");
+        var bytes = new ByteArrayOutputStream();
+        ImageIO.write(new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB), "PNG", bytes);
+        input.put("assets/large.png", bytes.toByteArray());
+        put(input, "ysm.json", """
+                {"files":{"player":{"model":{"main":"main.json"},"texture":{"uv":null,"normal":"../ignored.png"}}}}
+                """);
+        var texture = BlockbenchConverter.convert(input).getAsJsonObject().getAsJsonArray("textures").get(0).getAsJsonObject();
+        assertEquals(64, texture.get("width").getAsInt());
+        assertEquals(32, texture.get("uv_width").getAsInt());
+        input.put("assets/exact.png", original);
+        assertEquals("exact.png", BlockbenchConverter.convert(input).getAsJsonObject().getAsJsonArray("textures").get(0).getAsJsonObject().get("name").getAsString());
+    }
+
     private static Map<String, byte[]> resources(String bones) throws IOException {
         var resources = new LinkedHashMap<String, byte[]>();
         put(resources, "main.json", "{\"format_version\":\"1.12.0\",\"minecraft:geometry\":[{\"description\":{\"identifier\":\"geometry.test\",\"texture_width\":32,\"texture_height\":32},\"bones\":[" + bones + "]}]}");

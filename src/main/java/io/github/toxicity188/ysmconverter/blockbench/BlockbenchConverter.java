@@ -72,7 +72,9 @@ public final class BlockbenchConverter {
     /**
      * Converts the resource map returned by an existing YSM parser, without decrypting again.
      * For example, {@code BlockbenchConverter.convert(parser.getExtractedResources())}.
-     * Textures are decoded and embedded as PNG; an unavailable image decoder causes an error.
+     * Textures are decoded and embedded as PNG. Missing or invalid texture references use conservative
+     * image inference; ambiguous candidates remain unassigned. Use {@link #convertWithWarnings(Map)}
+     * to inspect texture selection diagnostics.
      *
      * @param resources relative resource paths and their contents
      * @return self-contained Blockbench 4.10 project, also readable by Blockbench 5
@@ -90,7 +92,7 @@ public final class BlockbenchConverter {
      * No temporary image cache files are created, regardless of global ImageIO cache settings.
      *
      * @param resources relative resource paths and their contents
-     * @return editable project and warnings about unsupported runtime features
+     * @return editable project and warnings about texture inference and unsupported runtime features
      * @throws IOException if resources are invalid, unsupported or cannot be decoded
      * @since 1.0.0
      */
@@ -106,6 +108,8 @@ public final class BlockbenchConverter {
     private static final class Conversion {
         private final Map<String, byte[]> resources = new LinkedHashMap<>();
         private final Map<String, JsonObject> documents = new LinkedHashMap<>();
+        private final Map<String, BufferedImage> images = new LinkedHashMap<>();
+        private final LinkedHashSet<String> auxiliaryTextures = new LinkedHashSet<>();
         private final List<String> warnings = new ArrayList<>();
 
         Conversion(Map<String, byte[]> input) {
@@ -174,9 +178,28 @@ public final class BlockbenchConverter {
                             && json(name).has("animations")) addAnimation(name, animations);
                     if (image(name) && !name.contains("/") && !name.toLowerCase(Locale.ROOT).matches(".*_(normal|specular|emissive)\\.[^.]+$")) textures.add(name);
                 }
-                warnings.add("Legacy layout: player skins inferred from root images; first sorted skin is the default");
+                if (!textures.isEmpty()) warnings.add("Legacy layout: player skins inferred from root images; first sorted skin is the default");
             }
-            if (textures.isEmpty()) throw new IOException("No player color texture found");
+            var requested = new LinkedHashSet<>(textures);
+            for (var name : requested) {
+                try {
+                    readImage(name);
+                } catch (IOException exception) {
+                    textures.remove(name);
+                    warnings.add("Invalid player texture: " + name + "; " + exception.getMessage());
+                }
+            }
+            if (textures.isEmpty()) inferTexture(textures, requested, project, geometryPath, width, height, manifest);
+            if (textures.isEmpty()) {
+                // False means an unassigned visible face; null means a deliberately hidden face.
+                for (var element : project.getAsJsonArray("elements")) {
+                    var cube = element.getAsJsonObject();
+                    if (cube.has("faces")) for (var face : cube.getAsJsonObject("faces").asMap().values()) {
+                        var object = face.getAsJsonObject();
+                        if (!object.get("texture").isJsonNull()) object.addProperty("texture", false);
+                    }
+                }
+            }
             project.add("textures", textures(textures, width, height, manifest));
             project.add("animations", BlockbenchAnimations.convert(animations, bones, warnings));
             return new BlockbenchResult(project, warnings);
@@ -194,8 +217,95 @@ public final class BlockbenchConverter {
             else if (value.isJsonPrimitive()) textures.add(normalize(value.getAsString()));
             else if (value.isJsonObject()) {
                 var object = value.getAsJsonObject();
-                if (object.has("uv")) textures.add(normalize(object.get("uv").getAsString()));
-                for (var key : object.keySet()) if (!key.equals("uv")) warnings.add("Auxiliary player texture is not a skin and was not applied: " + key);
+                if (object.has("uv") && !object.get("uv").isJsonNull()) textures.add(normalize(object.get("uv").getAsString()));
+                for (var key : object.keySet()) if (!key.equals("uv")) {
+                    warnings.add("Auxiliary player texture is not a skin and was not applied: " + key);
+                    if (object.get(key).isJsonPrimitive()) auxiliaryTextures.add(object.get(key).getAsString().replace('\\', '/'));
+                }
+            }
+        }
+
+        private void inferTexture(LinkedHashSet<String> textures, LinkedHashSet<String> requested, JsonObject project,
+                                  String geometryPath, double width, double height, JsonObject manifest) throws IOException {
+            var candidates = new LinkedHashMap<String, BufferedImage>();
+            for (var name : resources.keySet()) {
+                if (!image(name) || auxiliaryTextures.contains(name)
+                        || List.of(name.split("/")).stream().anyMatch(BlockbenchConverter::excluded)
+                        || name.toLowerCase(Locale.ROOT).matches("(^|.*/)(icon|preview|thumbnail|avatar|portrait)([._ /-].*)?")) continue;
+                try {
+                    candidates.put(name, readImage(name));
+                } catch (IOException exception) {
+                    if (!requested.contains(name)) warnings.add("Skipped fallback image: " + name + "; " + exception.getMessage());
+                }
+            }
+            if (candidates.isEmpty()) throw new IOException("No player color texture found; " + String.join("; ", warnings));
+            // Expanded face UVs cover box UV, signed sizes and per-face UV without duplicating geometry logic.
+            for (var element : project.getAsJsonArray("elements")) {
+                var cube = element.getAsJsonObject();
+                if (!cube.has("faces")) continue;
+                for (var face : cube.getAsJsonObject("faces").asMap().values()) {
+                    var object = face.getAsJsonObject();
+                    if (object.get("texture").isJsonNull()) continue;
+                    var uv = object.getAsJsonArray("uv");
+                    for (var axis = 0; axis < 4; axis++) {
+                        var value = uv.get(axis).getAsDouble();
+                        if (value < -0.0001 || value > (axis % 2 == 0 ? width : height) + 0.0001) {
+                            warnings.add("Texture fallback left unassigned: geometry UVs exceed the declared atlas; candidates: " + candidates.keySet());
+                            return;
+                        }
+                    }
+                }
+            }
+            var selected = manifest.has("properties") ? string(manifest.getAsJsonObject("properties"), "default_texture", "") : "";
+            var identifier = project.get("model_identifier").getAsString();
+            var best = new ArrayList<String>();
+            var bestScore = -1;
+            for (var entry : candidates.entrySet()) {
+                var name = entry.getKey();
+                var bitmap = entry.getValue();
+                // Bitmap resolution can differ from logical UV resolution, but uniform scaling preserves density.
+                if (bitmap.getWidth() * height != bitmap.getHeight() * width) continue;
+                var base = stem(name);
+                var score = bitmap.getWidth() == width && bitmap.getHeight() == height ? 2 : 0;
+                if (name.equals(selected) || base.equals(selected)
+                        || requested.stream().anyMatch(n -> stem(n).equalsIgnoreCase(base))) score += 16;
+                if (base.equalsIgnoreCase(identifier) || (!stem(geometryPath).equalsIgnoreCase("main")
+                        && base.equalsIgnoreCase(stem(geometryPath)))) score += 8;
+                var lower = name.toLowerCase(Locale.ROOT);
+                if (base.toLowerCase(Locale.ROOT).matches("(.*[._ -])?(skin|albedo|diffuse|color)([._ -].*)?")) score += 4;
+                if (lower.matches(".*(^|/)(textures?|player|body)/.*")) score++;
+                if (lower.matches(".*[._ -](normal|specular|emissive)\\.[^.]+$")) score -= 4;
+                if (score > bestScore || best.isEmpty()) {
+                    bestScore = score;
+                    best.clear();
+                    best.add(name);
+                } else if (score == bestScore) best.add(name);
+            }
+            if (best.size() == 1 && (candidates.size() == 1 || bestScore >= 0)) {
+                var name = best.getFirst();
+                textures.add(name);
+                warnings.add("Texture fallback selected " + name + " from " + candidates.size()
+                        + " image(s): compatible UV atlas " + width + "x" + height + ", bitmap "
+                        + candidates.get(name).getWidth() + "x" + candidates.get(name).getHeight()
+                        + (candidates.size() == 1 ? "; sole eligible image" : "; unique best evidence score " + bestScore));
+            } else warnings.add("Texture fallback left unassigned: insufficient or ambiguous image evidence; candidates: " + candidates.keySet());
+        }
+
+        private BufferedImage readImage(String name) throws IOException {
+            if (images.containsKey(name)) return images.get(name);
+            // Explicit memory streams avoid ImageIO's default disk cache without changing global settings.
+            try (var input = new MemoryCacheImageInputStream(new ByteArrayInputStream(resource(name)))) {
+                var readers = ImageIO.getImageReaders(input);
+                if (!readers.hasNext()) throw new IOException("Cannot decode player texture: " + name);
+                var reader = readers.next();
+                try {
+                    reader.setInput(input);
+                    var image = reader.read(0);
+                    images.put(name, image);
+                    return image;
+                } finally {
+                    reader.dispose();
+                }
             }
         }
 
@@ -211,21 +321,9 @@ public final class BlockbenchConverter {
             }
             var result = new JsonArray();
             for (var name : ordered) {
-                var bytes = resource(name);
+                var image = readImage(name);
                 var png = new ByteArrayOutputStream();
-                BufferedImage image;
-                // Explicit memory streams avoid ImageIO's default disk cache without changing global settings.
-                try (var input = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes));
-                     var output = new MemoryCacheImageOutputStream(png)) {
-                    var readers = ImageIO.getImageReaders(input);
-                    if (!readers.hasNext()) throw new IOException("Cannot decode player texture: " + name);
-                    var reader = readers.next();
-                    try {
-                        reader.setInput(input);
-                        image = reader.read(0);
-                    } finally {
-                        reader.dispose();
-                    }
+                try (var output = new MemoryCacheImageOutputStream(png)) {
                     if (!ImageIO.write(image, "PNG", output)) throw new IOException("PNG encoder unavailable");
                 }
                 var texture = new JsonObject();

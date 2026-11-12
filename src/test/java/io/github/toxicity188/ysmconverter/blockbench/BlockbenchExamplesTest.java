@@ -3,13 +3,19 @@ package io.github.toxicity188.ysmconverter.blockbench;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 
+import javax.imageio.ImageIO;
+import javax.imageio.stream.MemoryCacheImageInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 
@@ -18,6 +24,40 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /** Optional compatibility tests; all generated third-party assets stay in ignored build output. */
 class BlockbenchExamplesTest {
+    @Test
+    void recoversUnreferencedSuzuharaColorTextureInMemory() throws IOException {
+        var directory = Path.of("external/examples/_Vtuber_Vtuber_Suzuhara-Lulu");
+        assumeTrue(Files.isDirectory(directory), "Optional Suzuhara example is not installed");
+        var resources = new LinkedHashMap<String, byte[]>();
+        try (var paths = Files.walk(directory)) {
+            for (var path : paths.filter(Files::isRegularFile).toList()) {
+                resources.put(directory.relativize(path).toString().replace('\\', '/'), Files.readAllBytes(path));
+            }
+        }
+        var result = BlockbenchConverter.convertWithWarnings(resources);
+        var model = result.model();
+        assertEquals(704, model.getAsJsonArray("elements").size());
+        assertEquals(1, model.getAsJsonArray("textures").size());
+        var texture = model.getAsJsonArray("textures").get(0).getAsJsonObject();
+        assertEquals("suzuhara_ruru_normal.png", texture.get("name").getAsString());
+        assertEquals(256, texture.get("uv_width").getAsInt());
+        assertEquals(256, texture.get("uv_height").getAsInt());
+        var bytes = Base64.getDecoder().decode(texture.get("source").getAsString().split(",", 2)[1]);
+        // ImageIO.read(ImageInputStream) closes the stream after a successful read.
+        var expected = ImageIO.read(new MemoryCacheImageInputStream(new ByteArrayInputStream(resources.get("suzuhara_ruru_normal.png"))));
+        var actual = ImageIO.read(new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes)));
+        assertEquals(expected.getWidth(), actual.getWidth());
+        assertEquals(expected.getHeight(), actual.getHeight());
+        assertArrayEquals(expected.getRGB(0, 0, 256, 256, null, 0, 256), actual.getRGB(0, 0, 256, 256, null, 0, 256));
+        for (var element : model.getAsJsonArray("elements")) {
+            for (var face : element.getAsJsonObject().getAsJsonObject("faces").asMap().values()) {
+                var index = face.getAsJsonObject().get("texture");
+                if (!index.isJsonNull()) assertEquals(0, index.getAsInt());
+            }
+        }
+        assertTrue(result.warnings().stream().anyMatch(w -> w.contains("Texture fallback selected")));
+    }
+
     @TestFactory
     List<DynamicTest> convertsExtractedExamples() throws IOException {
         var directory = Path.of("external/examples");
