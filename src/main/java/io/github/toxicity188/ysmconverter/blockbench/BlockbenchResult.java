@@ -47,7 +47,7 @@ public record BlockbenchResult(@NotNull JsonObject model, @NotNull List<String> 
      * @since 1.0.0
      */
     public void write(@NotNull Path destination) throws IOException {
-        var json = new GsonBuilder().serializeNulls().disableHtmlEscaping().setPrettyPrinting().create().toJson(model);
+        var json = new GsonBuilder().serializeNulls().disableHtmlEscaping().create().toJson(model);
         PathSanitizer.writeSafe(destination, json.getBytes(StandardCharsets.UTF_8));
     }
 }
