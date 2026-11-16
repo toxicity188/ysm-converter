@@ -1,0 +1,66 @@
+ysm-converter
+Java port and derivative of Yes-Steve-Model Parser (YSMParser)
+
+Original project: https://github.com/OpenYSM/YSMParser
+Reference revision: 86c48922ecae79c4e9d16bffed1e8becbe849f98
+Original copyright notice, reproduced without correction or abbreviation:
+Copyright (c) [2026] [Yes-Steve-Model Parser (a.k.a. YSMParser)]
+
+Copyright (c) 2026 ysm-converter contributors
+
+The original YSMParser and this Java port are distributed under the MIT
+License. The full permission and warranty terms are in LICENSE. The original
+LICENSE.txt is also retained verbatim in
+src/main/resources/META-INF/licenses/YSMParser-MIT.txt in the source tree,
+and META-INF/licenses/YSMParser-MIT.txt in the built JAR.
+
+Changes from the reference implementation
+
+The YSM container parsing, format-specific decryption/decompression and
+geometry reconstruction have been ported to Java 21. The implementation
+uses JCA/JDK facilities, zstd-jni and Java ImageIO providers in place of
+corresponding C++ facilities. The Java project adds in-memory InputStream,
+byte[] and Path APIs, structured warnings, checked extraction paths,
+Blockbench project reconstruction, embedded textures and texture fallback,
+animation UUID validation/repair, and conservative prop/auxiliary visibility.
+These changes are maintained in this repository and are not a release of
+the original OpenYSM implementation.
+
+Algorithm and dependency attribution
+
+The YSM-modified CityHash64 implementation derives from the CityHash
+algorithm by Google. Its retained MIT notice is in CityHash-MIT.txt.
+The XChaCha20 lineage includes Bryan Hawkins (BSD-3-Clause), Daniel J.
+Bernstein's public-domain ChaCha work and modified libsodium functions
+by Frank Denis (ISC). Both the original xchacha20 LICENSE and NOTICE are
+retained, including the ISC terms and copyright notice.
+Custom YSM Zstandard handling retains the upstream Zstandard BSD notice.
+
+Runtime dependencies include Gson and Error Prone annotations (Apache-2.0),
+TwelveMonkeys ImageIO/common modules (BSD-3-Clause), zstd-jni (BSD-2-Clause)
+and its bundled native Zstandard (BSD-3-Clause option). JetBrains annotations
+are compile-only. Their source attributions and full license terms are
+retained under META-INF/licenses. THIRD_PARTY_LICENSES.md provides versions,
+sources and distribution instructions. Test and build tooling have their
+own licenses as recorded there.
+
+The bundled native Zstandard includes its adapted xxHash implementation.
+Copyright (c) Yann Collet - Meta Platforms, Inc
+Its header permits selection of the native source tree's BSD license or
+GPLv2. This distribution selects the BSD terms retained in
+META-INF/licenses/zstd-BSD-3-Clause.txt.
+
+The copied upstream dependency notices for AES, MD5, cpp-base64 and zlib
+document provenance of the reference repository. This Java library uses
+JDK implementations for those operations. The upstream C++ sources are
+not compiled into this library.
+
+Third-party model assets
+
+The models, textures, animations and other assets under external/examples
+and external/Yes-Steve-Model-Repo retain their authors' individual terms.
+They and their converted outputs are not covered by the library's MIT grant.
+No model redistribution rights are granted by decryption or conversion.
+
+This notice records attribution and changes. It does not replace or amend
+any license text, or imply endorsement by the original authors.

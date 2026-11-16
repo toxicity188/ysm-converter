@@ -1,76 +1,153 @@
-# Java Coding and Javadoc Guidelines
+# Contributor instructions
 
-This document defines coding style and documentation conventions for automated contributors working on the Java rewrite of YSMParser.
+Scope is the entire repository unless a more specific `AGENTS.md` applies. Read this file before
+suggesting or modifying code. Preserve existing behavior and conversion accuracy through focused,
+verified changes.
 
-Scope: the entire repository unless a more specific `AGENTS.md` overrides it.
+## Project structure
 
-## Reference Implementation
+Production code is Java 21 under `src/main/java/io/github/toxicity188/ysmconverter/`.
 
-- `external/YSMParser` is a Git submodule containing the original C++ implementation.
-- Use it as the authoritative reference for the Java rewrite.
-- Do not modify files inside `external/YSMParser`.
-- Do not introduce runtime or build-time dependencies on the original C++ implementation.
-- Implement the required functionality independently in Java 21.
-- Preserve behavioral compatibility with the original implementation.
+| Package or path | Responsibility |
+| --- | --- |
+| `api` | `YsmConverter`, parser selection and public resource/result objects |
+| `format` | Container version detection and V3 internal format tags |
+| `binary` | Binary readers and primitive/vector representations |
+| `crypto` | YSM-specific cipher, hash and random-generator operations |
+| `compression` | Custom YSM Zstandard handling and standard decompression dispatch |
+| `parser` | V1/V2/V3 resource deserialization, image handling and safe extraction paths |
+| `model` | Geometry math and reconstruction from parsed binary structures |
+| `blockbench` | Project assembly, Geometry/UV, Animation, UUID repair, textures and prop visibility |
+| `src/main/resources/META-INF` | Packaged licenses, attribution and dependency inventory |
+| `src/test/java` | Generated-data unit tests and local asset compatibility checks |
+| `docs/blockbench-conversion.md` | Conversion rules, limitations and dated validation observations |
+| `external/YSMParser` | Read-only C++ reference implementation, pinned Git submodule |
+| `external/examples` | Read-only extracted examples and occasional original `.bbmodel` references |
+| `external/Yes-Steve-Model-Repo` | Read-only third-party encrypted compatibility models |
+| `build` | Generated classes, reports, extracted resources and local review artifacts |
 
-## Test Model Repository
+## Pipeline and API boundaries
 
-- `external/Yes-Steve-Model-Repo` contains third-party YSM models used for compatibility testing.
-- Treat this directory as read-only test data.
-- Do not modify or redistribute the original model assets.
-- Do not include converted models in commits or release artifacts without appropriate permission.
-- Test multiple YSM format versions and report conversion failures.
-- Keep unit tests independent of this external repository.
-- Use the external repository only for optional integration and compatibility tests.
+The supported pipeline is container detection, decryption, decompression, resource parsing,
+then Blockbench conversion. `YsmConverter.parse(input)` returns `YsmResourceResult`, including
+resources, version information and warnings. `decrypt(input)` returns the resource map directly.
+Both accept `InputStream`, `byte[]` and `Path`. Caller-owned streams remain open on success and
+failure. Path input conveniences own and close their streams.
 
-## 1. Language and Compatibility
+`BlockbenchConverter.convert(Map<String, byte[]>)` returns `JsonElement`.
+`convertWithWarnings(Map)` returns `BlockbenchResult`. Keep conversion in memory, including image
+decode/encode. Use memory ImageIO streams to avoid implicit disk caches. Do not change global
+ImageIO cache settings. Avoid new runtime or build-time dependencies on the C++ implementation.
 
-### MUST
-- Use Java 21 as the source and target language level.
-- Write production code in Java only. Do not introduce Kotlin source files or Kotlin-specific build tooling.
-- Keep Java code compatible with Java 21; do not use APIs or language features introduced in later releases.
-- Follow the package structure, naming conventions, import organization, formatting, and nullability conventions already established in the repository.
+Preserve existing Path conveniences and their observable behavior. `YsmConverter.parse(Path, Path)`
+and `parse(byte[], Path)` perform extraction through the memory API. `BlockbenchConverter.convert(Path)`
+reads an extracted directory. `BlockbenchResult.write(Path)` handles output. Keep filesystem writes
+at explicit extraction/save boundaries and preserve path traversal and symlink protections.
 
-## 2. Java Code Style
+Resource result maps are shallow snapshots with mutable byte arrays. Project JSON is mutable.
+Do not promise deep immutability. Keep warnings available through result objects. Match established
+exception contracts. Parsing uses `IOException` and specific unchecked malformed-input,
+unsupported-format and integrity exceptions. Conversion wraps invalid-resource failures in
+`IOException`. Do not silently convert malformed input into a valid-looking empty model.
 
-### MUST
-- Write English Javadoc for public API types, constructors, and methods.
-- Update Javadoc whenever a public API is changed.
-- Use `var` for local variables when legal and the inferred type remains clear.
-- Declare classes `final` when they are not designed for inheritance.
-- Name factory methods `of(...)` where appropriate.
-- Prefer enum-based singletons when a singleton is genuinely needed.
-- If the project already uses fastutil, prefer its primitive-specialized collections over boxed `java.util` collections for primitive-heavy data structures.
+## Java and design conventions
 
-### RECOMMENDED
-- Prefer `record` for immutable data carriers.
-- Where practical, provide a factory method on an interface rather than exposing implementation details.
-- Prefer composition and small, focused types over inheritance-heavy designs.
-- Follow the surrounding code style instead of reformatting unrelated files.
+- Use Java 21 source/target compatibility and APIs. Production code stays Java. Retain the existing
+  Kotlin DSL Gradle build without introducing Kotlin production sources or new Kotlin tooling.
+- Follow surrounding package structure, imports, formatting and JetBrains nullability annotations.
+- Use `var` for locals when legal and clear. Prefer records for immutable carriers and `final`
+  classes unless inheritance is intentional. Name appropriate factories `of(...)`.
+- Prefer enum-based singletons when a singleton is genuinely needed. Where practical, expose
+  a factory on an interface rather than exposing implementation details.
+- Reuse existing helpers and standard-library operations. Prefer composition and focused types.
+  Avoid speculative abstractions, unnecessary hierarchies and unrelated formatting changes.
+- If fastutil is already introduced for a justified need, prefer its primitive collections for
+  primitive-heavy code. Its mere mention here is not a reason to add it as a dependency.
+- Read callers and existing tests before changing shared behavior. Edit only the scope requested.
+  Preserve existing source notices and document substantive port changes accurately.
 
-### DISCOURAGED
-- Unnecessary inheritance hierarchies and speculative abstractions.
-- Broad formatting or naming changes unrelated to the task.
+## Javadoc
 
-## 3. Javadoc Policy
+Write English Javadoc for public types, constructors and methods. Update it with API changes.
+Document record components with type-level `@param`, return values with `@return`, and expected
+contract exceptions with `@throws`. Include concise practical Java 21 usage examples. Keep YSM,
+decryption, parsing, geometry reconstruction and Blockbench terminology consistent.
 
-### MUST
-- Write all Javadoc in English.
-- Use `@since` for public APIs, following the version declared in `gradle.properties` when the project uses that versioning convention. If the versioning policy has not been established, do not invent a version; establish the policy first.
-- Include `@return` for methods that return a value.
-- Document every `record` component with `@param` in the record's type-level Javadoc.
-- Include `@throws` for exceptions that public API methods explicitly throw or are expected to propagate as part of their contract.
-- Provide at least one practical usage example for each public API type or API entry point. Prefer standard Javadoc `{@code ...}` or `<pre>{@code ...}</pre>` blocks rather than custom tags.
-- Keep terminology consistent with the project domain, including YSM, model decryption, binary parsing, geometry reconstruction, and Blockbench conversion.
-- Ensure documentation accurately reflects behavior and does not promise unsupported format versions or guarantees.
+Use `@since` according to the established API version. The current project version is `1.0.0`
+in `build.gradle.kts`, and existing public APIs use `@since 1.0.0`. Check the actual build version
+when adding APIs. If versioning moves to `gradle.properties`, follow that value. Do not invent
+support guarantees or a new versioning policy in comments.
 
-### RECOMMENDED
-- Describe parameter constraints and edge cases where they affect callers.
-- Explain observable behavior, failure conditions, and important format limitations without repeating the implementation line by line.
-- Keep examples concise and compilable with Java 21 whenever practical.
+## Conversion invariants
 
-## 4. Existing Code Precedence
+- Select player resources using `ysm.json`/legacy `main.json` and established role rules. Current
+  scope is third-person player geometry. Arm, projectile and TAC resources are excluded.
+- Preserve Bone hierarchy, Pivot, rotations, cube dimensions, inflate and UV semantics. Keep the
+  project version and its coordinate/sign migration rules coherent. Compare transformed shape
+  and UVs with source/original projects when changing reconstruction math.
+- Keep logical UV resolution distinct from decoded bitmap dimensions. Preserve signed UV sizes,
+  mirror behavior, face rotations and deliberately missing faces. `texture: null` hides a face,
+  while `texture: false` leaves a visible face unassigned. Save JSON with `serializeNulls()`.
+- Keep valid explicit texture references and ordering. Fallback needs evidence and warnings.
+  Do not resolve ambiguous images by map order or a sample-specific filename.
+- Bone animator keys must resolve to actual nested outliner groups, excluding cube/locator UUID
+  strings. Treat `effects` as a special animator. Preserve valid tracks and all recoverable keys.
+  Repair stale UUIDs only with unambiguous evidence. Do not invent missing bones or pick among
+  duplicate names. Unresolvable tracks and animations emptied by removal need diagnostics.
+- Prop inference changes default editor `visibility` only. Keep geometry, UUIDs, hierarchy,
+  Pivot and keyframes. Hide selected descendants consistently and verify they can be shown again.
+  Default visibility is independent of runtime scale animation.
+- Be conservative with props. Names, `scale: 0`, a hand parent or script references alone do not
+  establish a prop. Preserve uncertain candidates and protect body, hair, clothing and expressions.
+  `ysmGlow` is also used for facial and clothing details. GUI roles need independent metadata and
+  animation evidence. Never assume arbitrary Molang variables default to zero.
+- Runtime controllers, scripts, layered animations and query state exceed authoring reconstruction.
+  Preserve supported editable data and disclose limitations. Do not claim game-runtime equivalence.
 
-- Prefer established local conventions over generic preferences in this document when they conflict.
-- Preserve behavior when adjusting documentation or style.
-- Keep style-related changes focused on files relevant to the task.
+## Tests and visual verification
+
+Unit tests must remain independent of external assets. Use small generated fixtures for specific
+regressions. External data belongs in optional integration checks, with assumptions/skips when
+fixtures are absent. Avoid creating assertions that merely mirror implementation decisions.
+
+```powershell
+.\gradlew test --tests '*api.*' --tests '*crypto.*' --tests '*compression.*' --tests '*format.*' --tests '*model.*' --tests '*parser.*' --tests '*BlockbenchConverterTest' --tests '*BlockbenchAnimationReferencesTest'
+.\gradlew test --tests '*BlockbenchExamplesTest' --tests '*BlockbenchMemoryIntegrationTest'
+.\gradlew test --tests 'io.github.toxicity188.ysmconverter.IntegrationTest'
+.\gradlew build javadoc
+```
+
+Use `./gradlew` on Unix-like systems. Current wrapper is Gradle 9.9.1, with Java 21 bytecode.
+The full build executes every test present locally. An optional local `BlockbenchTest` requires
+the encrypted repository. It may not exist in a fresh checkout. Prop integration checks depend
+on extraction output in `build/ysm-parser-tests/extracted/`, so run the extraction integration
+test first when those fixtures are needed. Attachment checks use their documented local input.
+
+Use several format versions and layouts. Check geometry and UV invariants, embedded texture
+pixels, animator references, warnings and visibility. Report compatibility failures rather than
+discarding failed samples. Original `.bbmodel` files are comparison oracles and must not become
+conversion shortcuts. Keep all review outputs under ignored `build/` directories.
+
+For visual changes, use the available Blockbench use/MCP overview/animation skills and a live MCP
+server. Discover capabilities and format first. Preserve the user's project and inspect a new
+review tab. Open generated `.bbmodel` through Blockbench's native project codec, then inspect
+hierarchy, texture errors and unresolved animators. Render with a fixed offscreen camera. Compare
+the source project under matching conditions when available. Sample multiple animation times
+and loop seams. For visibility changes, show hidden subtrees again and verify complete geometry.
+Use native undo transactions for temporary scene edits and restore inspection changes afterward.
+When MCP is unavailable, state which visual checks remain pending and keep review files. A JSON
+test passing alone does not establish correct rendering. Do not report an unperformed check.
+
+## Third-party assets and release notices
+
+Use `external/YSMParser` as the behavioral reference for the Java port. Do not modify it or require
+it to build/run the Java library. A task can limit reference analysis further. The original MIT
+notice and component licenses must remain intact. Follow `LICENSE`, `NOTICE` and
+`THIRD_PARTY_LICENSES.md`. Keep root notice documents synchronized with their packaged copies
+under `src/main/resources/META-INF`. Recheck resolved dependency licenses when versions change.
+
+Treat both model directories as read-only test data. Do not modify or redistribute source assets,
+decrypted resources or converted models without appropriate permission. Exclude them from commits
+and release artifacts unless authorized by their owners. Their licenses are separate from the
+library's MIT terms. Document model failures and source-data differences without sample-specific
+production overrides.
