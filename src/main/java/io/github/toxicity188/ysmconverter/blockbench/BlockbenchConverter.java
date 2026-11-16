@@ -35,6 +35,8 @@ import static io.github.toxicity188.ysmconverter.blockbench.BlockbenchGeometry.*
  * arm resources, projectile models and TAC animations are excluded. Original .bbmodel files
  * are never used as conversion input. Runtime controllers and YSM-specific Molang queries
  * cannot be reproduced without the game runtime; diagnostics describe these limitations.
+ * High-confidence prop candidates start hidden in the outliner. Their geometry and animation
+ * remain editable; conversion diagnostics identify the hidden subtrees and inference evidence.
  * <pre>{@code
  * var resources = YsmConverter.decrypt(inputStream);
  * JsonElement model = BlockbenchConverter.convert(resources);
@@ -227,6 +229,8 @@ public final class BlockbenchConverter {
             project.add("textures", textures(textures, width, height, manifest));
             project.add("animations", BlockbenchAnimations.convert(animations, bones, warnings));
             BlockbenchAnimations.repairReferences(project, bones, warnings);
+            BlockbenchProps.apply(geometry, animations, project, warnings,
+                    manifest.has("properties") ? string(manifest.getAsJsonObject("properties"), "preview_animation", "") : "");
             return new BlockbenchResult(project, warnings);
         }
 
