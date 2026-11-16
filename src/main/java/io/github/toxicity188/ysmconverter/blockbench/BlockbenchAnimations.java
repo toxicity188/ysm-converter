@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -47,11 +48,14 @@ final class BlockbenchAnimations {
                 }
                 var animators = new JsonObject();
                 animation.add("animators", animators);
+                var skippedBones = false;
                 if (source.has("bones")) {
                     for (var bone : source.getAsJsonObject("bones").entrySet()) {
                         var boneId = bones.get(bone.getKey());
                         if (boneId == null) {
                             missing.add(bone.getKey());
+                            skippedBones = true;
+                            warnings.add("Removed bone animator " + name + "/" + bone.getKey() + ": no matching third-person bone");
                             continue;
                         }
                         var animator = new JsonObject();
@@ -133,12 +137,128 @@ final class BlockbenchAnimations {
                     }
                 }
                 animation.addProperty("length", length);
+                if (skippedBones && animators.isEmpty()) {
+                    warnings.add("Removed animation " + name + ": no valid animators remain");
+                    continue;
+                }
                 animations.add(animation);
             }
         }
         if (!missing.isEmpty()) warnings.add("Animation tracks without matching third-person bones were skipped: " + String.join(", ", missing));
         if (expressions) warnings.add("Molang expressions are preserved; YSM query/variable values must be supplied in Blockbench for runtime-equivalent previews");
         return animations;
+    }
+
+    static void repairReferences(JsonObject project, Map<String, String> sourceBones, List<String> warnings) {
+        if (!project.has("animations")) return;
+        var groups = new LinkedHashMap<String, List<String>>();
+        var names = new LinkedHashMap<String, List<String>>();
+        collectGroups(project.getAsJsonArray("outliner"), groups, names);
+        var animations = project.getAsJsonArray("animations").iterator();
+        while (animations.hasNext()) {
+            var animation = animations.next().getAsJsonObject();
+            if (!animation.has("animators")) continue;
+            var original = animation.getAsJsonObject("animators");
+            var repaired = new JsonObject();
+            var pending = new LinkedHashMap<String, List<Map.Entry<String, JsonElement>>>();
+            var label = string(animation, "name", "unnamed");
+            for (var entry : original.entrySet()) {
+                var animator = entry.getValue().getAsJsonObject();
+                var key = entry.getKey();
+                var type = string(animator, "type", key.equals("effects") ? "effect" : "bone");
+                var name = string(animator, "name", "");
+                String target;
+                if (type.equals("effect")) {
+                    target = "effects";
+                } else if (!type.equals("bone")) {
+                    // Other animator kinds are not group references; do not retarget them as bones.
+                    repaired.add(key, animator);
+                    warnings.add("Preserved non-bone animator " + label + "/" + key + " of unsupported type " + type);
+                    continue;
+                } else if (!key.equals("effects") && groups.containsKey(key) && groups.get(key).size() == 1) {
+                    target = key;
+                } else {
+                    var matches = names.getOrDefault(name, List.of());
+                    var sourceId = sourceBones.get(name);
+                    // Only the map produced from this geometry is authoritative. Never generate a UUID
+                    // from a guessed name, or select one of several same-named groups by traversal order.
+                    target = sourceId != null && matches.contains(sourceId) ? sourceId
+                            : matches.size() == 1 ? matches.getFirst() : null;
+                    if (target == null || target.equals("effects") || groups.get(target).size() != 1) {
+                        warnings.add("Removed bone animator " + label + "/" + name + " [" + key
+                                + "]: missing or ambiguous outliner bone");
+                        continue;
+                    }
+                }
+                if (target.equals(key)) repaired.add(target, animator);
+                else pending.computeIfAbsent(target, ignored -> new ArrayList<>()).add(entry);
+            }
+            for (var repair : pending.entrySet()) {
+                var target = repair.getKey();
+                var existing = repaired.getAsJsonObject(target);
+                var merged = existing == null ? null : existing.deepCopy();
+                var conflict = false;
+                for (var entry : repair.getValue()) {
+                    var animator = entry.getValue().getAsJsonObject();
+                    if (merged == null) merged = animator.deepCopy();
+                    else if (!mergeAnimators(merged, animator)) {
+                        conflict = true;
+                        break;
+                    }
+                }
+                if (conflict) {
+                    // Retain the valid UUID's animator, if any. Conflicting stale tracks have no priority.
+                    warnings.add("Removed conflicting animator repairs " + label + "/" + target + ": "
+                            + repair.getValue().stream().map(Map.Entry::getKey).toList());
+                    continue;
+                }
+                repaired.add(target, merged);
+                for (var entry : repair.getValue()) warnings.add("Repaired animator UUID " + label + "/"
+                        + string(entry.getValue().getAsJsonObject(), "name", "effects") + ": " + entry.getKey() + " -> " + target);
+            }
+            if (!original.isEmpty() && repaired.isEmpty()) {
+                animations.remove();
+                warnings.add("Removed animation " + label + ": no valid animators remain");
+            } else if (!original.equals(repaired)) animation.add("animators", repaired);
+        }
+    }
+
+    private static void collectGroups(JsonArray outliner, Map<String, List<String>> groups, Map<String, List<String>> names) {
+        if (outliner == null) return;
+        for (var node : outliner) {
+            if (!node.isJsonObject()) continue; // Cube and locator UUID strings are not bones.
+            var group = node.getAsJsonObject();
+            if (group.has("uuid") && string(group, "type", "group").equals("group")) {
+                var name = string(group, "name", "");
+                var uuid = group.get("uuid").getAsString();
+                groups.computeIfAbsent(uuid, ignored -> new ArrayList<>()).add(name);
+                if (!name.isEmpty()) names.computeIfAbsent(name, ignored -> new ArrayList<>()).add(uuid);
+            }
+            collectGroups(group.getAsJsonArray("children"), groups, names);
+        }
+    }
+
+    private static boolean mergeAnimators(JsonObject target, JsonObject source) {
+        var targetProperties = target.deepCopy();
+        var sourceProperties = source.deepCopy();
+        for (var property : List.of("keyframes", "name")) {
+            targetProperties.remove(property);
+            sourceProperties.remove(property);
+        }
+        if (!targetProperties.equals(sourceProperties)) return false;
+        var keys = target.getAsJsonArray("keyframes");
+        for (var key : source.getAsJsonArray("keyframes")) {
+            var object = key.getAsJsonObject();
+            var collision = keys.asList().stream().filter(value -> {
+                var other = value.getAsJsonObject();
+                return other.get("channel").equals(object.get("channel"))
+                        && other.get("time").getAsDouble() == object.get("time").getAsDouble();
+            }).findFirst();
+            if (collision.isPresent()) {
+                if (!collision.get().equals(key)) return false;
+            } else keys.add(key.deepCopy());
+        }
+        return true;
     }
 
     private static JsonObject key(String channel, double timestamp, JsonElement source) {

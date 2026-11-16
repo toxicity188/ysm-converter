@@ -33,6 +33,17 @@ class BlockbenchMemoryIntegrationTest {
                 assertFalse(parsed.resources().isEmpty());
                 JsonElement converted = BlockbenchConverter.convert(parsed.resources());
                 assertProject(converted);
+                // Simulate a stale UUID in a real converted model, preserving its source bone name.
+                var damaged = converted.deepCopy().getAsJsonObject();
+                var animators = damaged.getAsJsonArray("animations").asList().stream()
+                        .map(a -> a.getAsJsonObject().getAsJsonObject("animators"))
+                        .filter(a -> a.keySet().stream().anyMatch(id -> !id.equals("effects"))).findFirst().orElseThrow();
+                var boneId = animators.keySet().stream().filter(id -> !id.equals("effects")).findFirst().orElseThrow();
+                animators.add("stale-bone-uuid", animators.remove(boneId));
+                var repaired = BlockbenchConverter.repairAnimationReferences(damaged);
+                assertEquals(converted, repaired.model(), "Only the stale UUID should change: " + name);
+                assertTrue(repaired.warnings().stream().anyMatch(w -> w.contains("Repaired animator UUID")));
+                BlockbenchAnimationReferencesTest.assertValidReferences(repaired.model());
                 System.out.printf("%s: %s/%d, %d resources, %d cubes, %d parser warnings%n", name,
                         parsed.version(), parsed.formatVersion(), parsed.resources().size(),
                         converted.getAsJsonObject().getAsJsonArray("elements").size(), parsed.warnings().size());

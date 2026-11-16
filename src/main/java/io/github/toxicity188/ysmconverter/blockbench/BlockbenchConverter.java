@@ -105,6 +105,30 @@ public final class BlockbenchConverter {
         }
     }
 
+    /**
+     * Repairs bone animator references in a copy of an existing Blockbench project, entirely in memory.
+     * Valid UUIDs are preserved. A stale UUID is replaced only by an unambiguous outliner bone name.
+     * Unresolvable tracks and animations emptied by their removal are dropped with warnings.
+     * Effects use the reserved {@code effects} animator key. Geometry and the input object are unchanged.
+     * For example, {@code var result = BlockbenchConverter.repairAnimationReferences(model)}.
+     *
+     * @param model project with nested outliner groups and optional animations
+     * @return repaired project and diagnostics for changed or unsupported animators
+     * @throws IOException if the project has malformed animation or outliner data
+     * @since 1.0.0
+     */
+    @CheckReturnValue
+    public static @NotNull BlockbenchResult repairAnimationReferences(@NotNull JsonObject model) throws IOException {
+        try {
+            var copy = model.deepCopy();
+            var warnings = new ArrayList<String>();
+            BlockbenchAnimations.repairReferences(copy, Map.of(), warnings);
+            return new BlockbenchResult(copy, warnings);
+        } catch (IllegalArgumentException | IllegalStateException | NullPointerException | IndexOutOfBoundsException exception) {
+            throw new IOException("Invalid Blockbench animation references: " + exception.getMessage(), exception);
+        }
+    }
+
     private static final class Conversion {
         private final Map<String, byte[]> resources = new LinkedHashMap<>();
         private final Map<String, JsonObject> documents = new LinkedHashMap<>();
@@ -202,6 +226,7 @@ public final class BlockbenchConverter {
             }
             project.add("textures", textures(textures, width, height, manifest));
             project.add("animations", BlockbenchAnimations.convert(animations, bones, warnings));
+            BlockbenchAnimations.repairReferences(project, bones, warnings);
             return new BlockbenchResult(project, warnings);
         }
 

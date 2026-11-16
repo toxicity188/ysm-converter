@@ -1,5 +1,6 @@
 package io.github.toxicity188.ysmconverter.blockbench;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.DynamicTest;
@@ -100,7 +101,16 @@ class BlockbenchExamplesTest {
     private static void compareAsunaOriginal(Path directory, JsonObject project) throws IOException {
         var original = read(directory.resolve("mra.bbmodel"));
         assertEquals(original.getAsJsonArray("elements").size(), project.getAsJsonArray("elements").size());
-        assertEquals(original.getAsJsonArray("animations").size(), project.getAsJsonArray("animations").size());
+        var boneNames = new HashSet<String>();
+        collectBoneNames(project.getAsJsonArray("outliner"), boneNames);
+        var expectedAnimations = original.getAsJsonArray("animations").asList().stream()
+                .map(a -> a.getAsJsonObject()).filter(a -> {
+                    var animators = a.getAsJsonObject("animators");
+                    return animators.isEmpty() || animators.entrySet().stream().anyMatch(e -> e.getKey().equals("effects")
+                            || boneNames.contains(e.getValue().getAsJsonObject().get("name").getAsString()));
+                }).map(a -> a.get("name").getAsString()).toList();
+        assertEquals(expectedAnimations, project.getAsJsonArray("animations").asList().stream()
+                .map(a -> a.getAsJsonObject().get("name").getAsString()).toList());
         // Cube pivots may be arbitrary when rotation is zero. Compare actual shape and UV instead.
         var remaining = new ArrayList<>(original.getAsJsonArray("elements").asList());
         for (var element : project.getAsJsonArray("elements")) {
@@ -114,6 +124,14 @@ class BlockbenchExamplesTest {
                 for (var axis = 0; axis < 4; axis++) assertEquals(expectedUv.get(axis).getAsDouble(), actualUv.get(axis).getAsDouble(), 0.0001);
             }
             remaining.remove(match.orElseThrow());
+        }
+    }
+
+    private static void collectBoneNames(JsonArray nodes, HashSet<String> names) {
+        for (var node : nodes) if (node.isJsonObject()) {
+            var group = node.getAsJsonObject();
+            names.add(group.get("name").getAsString());
+            collectBoneNames(group.getAsJsonArray("children"), names);
         }
     }
 
