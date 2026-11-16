@@ -1,0 +1,82 @@
+name: Publish release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag matching gradle.properties version (for example 1.0.0)
+        required: true
+        type: string
+      target:
+        description: Repositories to publish
+        required: true
+        default: both
+        type: choice
+        options: [both, central, github]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify tag and build
+        run: |
+          chmod +x gradlew
+          ./gradlew verifyReleaseVersion build -PreleaseTag="$RELEASE_TAG" -PsigningEnabled=false
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
+      - name: Publish to Maven Central
+        if: github.event_name == 'release' || inputs.target == 'both' || inputs.target == 'central'
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew verifyReleaseVersion publishAndReleaseToMavenCentral -PreleaseTag="$RELEASE_TAG" --no-configuration-cache
+      - name: Publish to GitHub Packages
+        if: github.event_name == 'release' || inputs.target == 'both' || inputs.target == 'github'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew verifyReleaseVersion publishAllPublicationsToGitHubPackagesRepository -PreleaseTag="$RELEASE_TAG" --no-configuration-cache

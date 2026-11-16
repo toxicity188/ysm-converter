@@ -38,9 +38,65 @@ On Unix-like systems use `./gradlew` with the same arguments. Output is
 `build/libs/ysm-converter-1.0.0.jar` and `build/docs/javadoc/`. Builds may download the Gradle
 distribution and dependencies from Maven Central.
 
-The build defines no publication task or remote Maven repository. The group
-`io.github.toxicity188.ysmconverter` and version `1.0.0` describe the local project.
-For a Gradle engine project, include this checkout as a local subproject.
+## Library dependencies
+
+Publishing is configured for `io.github.toxicity188:ysm-converter:<version>`. No public version
+has been published or verified yet. The following `1.0.0` examples describe the intended first
+release and will resolve after that release is available. `gradle.properties` is the version source.
+
+Maven Central is the primary repository
+
+```kotlin
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("io.github.toxicity188:ysm-converter:1.0.0")
+}
+```
+
+GitHub Packages is an alternative using the same coordinates and version. Package downloads
+require an authorized GitHub token. Supply `githubPackagesUsername` and `githubPackagesPassword`
+through local Gradle properties or their `ORG_GRADLE_PROJECT_` environment variables.
+
+```kotlin
+repositories {
+    mavenCentral()
+    maven {
+        url = uri("https://maven.pkg.github.com/toxicity188/ysm-converter")
+        credentials {
+            username = providers.gradleProperty("githubPackagesUsername").orNull
+            password = providers.gradleProperty("githubPackagesPassword").orNull
+        }
+        content { includeGroup("io.github.toxicity188") }
+    }
+}
+
+dependencies {
+    implementation("io.github.toxicity188:ysm-converter:1.0.0")
+}
+```
+
+JitPack builds the public Git tag using its own namespace. Tags must exactly match the project
+version, for example `1.0.0` without a `v` prefix. Its hosted build remains to be verified after
+the GitHub repository becomes public.
+
+```kotlin
+repositories {
+    mavenCentral()
+    maven {
+        url = uri("https://jitpack.io")
+        content { includeGroup("com.github.toxicity188") }
+    }
+}
+
+dependencies {
+    implementation("com.github.toxicity188:ysm-converter:1.0.0")
+}
+```
+
+For an engine using the local checkout, include it as a Gradle subproject.
 
 In the engine's `settings.gradle.kts`
 
@@ -62,14 +118,23 @@ repositories {
 
 dependencies {
     implementation(project(":ysm-converter"))
-    implementation("com.google.code.gson:gson:2.15.0")
 }
 ```
 
-Gson is part of the public API. Engine source using `JsonElement` needs Gson on its compile
-classpath because the producer currently uses the `java` plugin and `implementation` dependencies.
+Gson is part of the public API and is published as a compile/API dependency through `java-library`.
 Direct JAR consumers must supply the resolved runtime dependencies listed in the license inventory.
 Shading must preserve ImageIO service registrations and `zstd-jni` native resources.
+
+Local publication can be tested without a signing key
+
+```powershell
+.\gradlew publishToMavenLocal -PsigningEnabled=false
+```
+
+Release publishing signs the binary, Sources, Javadoc and metadata. GitHub Actions publishes
+only after an explicit published release or manual workflow trigger. Configure the `release`
+environment with required reviewers for approval. Setup, Secrets and the first-release procedure
+are documented in the publishing guide. [Publishing guide](docs/publishing.md)
 
 ## Convert a stream in memory
 

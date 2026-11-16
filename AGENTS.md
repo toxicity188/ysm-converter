@@ -74,8 +74,8 @@ contract exceptions with `@throws`. Include concise practical Java 21 usage exam
 decryption, parsing, geometry reconstruction and Blockbench terminology consistent.
 
 Use `@since` according to the established API version. The current project version is `1.0.0`
-in `build.gradle.kts`, and existing public APIs use `@since 1.0.0`. Check the actual build version
-when adding APIs. If versioning moves to `gradle.properties`, follow that value. Do not invent
+in `gradle.properties`, and existing public APIs use `@since 1.0.0`. Check the actual build version
+when adding APIs. Follow that single version for all repositories. Do not invent
 support guarantees or a new versioning policy in comments.
 
 ## Conversion invariants
@@ -139,6 +139,14 @@ When MCP is unavailable, state which visual checks remain pending and keep revie
 test passing alone does not establish correct rendering. Do not report an unperformed check.
 
 ## Third-party assets and release notices
+
+Publishing uses `com.vanniktech.maven.publish` with `java-library`. Central and GitHub Packages
+coordinates are `io.github.toxicity188:ysm-converter:<version>`. JitPack uses its own group and
+the identical tag/version. Keep Gson as an API dependency because public methods expose its types.
+Retain binary, sources and Javadoc artifacts, their license resources and signatures. See
+`docs/publishing.md` for local verification and release triggers. Use local publishing for validation.
+Remote uploads require an explicit release request or the configured release/manual trigger.
+Never commit or log tokens, passphrases or private signing keys.
 
 Use `external/YSMParser` as the behavioral reference for the Java port. Do not modify it or require
 it to build/run the Java library. A task can limit reference analysis further. The original MIT

@@ -8,7 +8,7 @@ packaging or copied source change.
 ## Project and ported code
 
 The Java port uses MIT. The root `LICENSE` retains the upstream copyright line exactly,
-including its brackets, and adds a separate notice for Java contributors. `NOTICE` states
+including its brackets, and adds separate notices for toxicity188 and Java contributors. `NOTICE` states
 the relationship and modifications. MIT requires retention of the copyright and permission
 notice in copies or substantial portions. It permits use, modification, commercial distribution
 and sublicensing subject to that condition. MIT itself does not require a modification notice
@@ -48,7 +48,7 @@ of source notices. Keep the original texts and port attribution when redistribut
 | --- | --- | --- |
 | `com.github.luben:zstd-jni:1.5.7-25` | BSD-2-Clause | `zstd-jni-BSD-2-Clause.txt` |
 | Native Zstandard and its adapted xxHash included by zstd-jni | BSD-3-Clause selected from upstream's BSD/GPL alternatives | `zstd-BSD-3-Clause.txt` and attribution in `NOTICE` |
-| `com.google.code.gson:gson:2.15.0` | Apache-2.0 | `Apache-2.0.txt`, `Google-source-notices.txt` |
+| `com.google.code.gson:gson:2.15.0` (public API/compile dependency) | Apache-2.0 | `Apache-2.0.txt`, `Google-source-notices.txt` |
 | `com.google.errorprone:error_prone_annotations:2.50.0` (transitive) | Apache-2.0 | Same Apache/Google files |
 | `com.twelvemonkeys.imageio:imageio-core:3.15.3` | BSD-3-Clause | `TwelveMonkeys-BSD-3-Clause.txt`, `TwelveMonkeys-source-notices.txt` |
 | `com.twelvemonkeys.imageio:imageio-jpeg:3.15.3` | BSD-3-Clause | Same TwelveMonkeys files |
@@ -85,6 +85,7 @@ The license does not guarantee a native binary for every platform.
 | FastCSV code included in JUnit Jupiter Params | Tests | MIT, `docs/licenses/testing/FastCSV-MIT.txt` |
 | `org.opentest4j:opentest4j:1.3.0` | Tests, transitive | Apache-2.0, `docs/licenses/testing/OpenTest4J-Apache-2.0.txt` |
 | Gradle wrapper scripts and wrapper JAR, Gradle `9.9.1` | Build | Apache-2.0, existing script notices and retained `Apache-2.0.txt` |
+| `com.vanniktech.maven.publish` Gradle plugin `0.37.0` | Build/publishing | Apache-2.0, retained `Apache-2.0.txt` |
 
 The library JAR contains no JUnit classes. Redistribution or modification of test tooling is
 subject to its own terms, including EPL source-distribution obligations where applicable.
@@ -100,8 +101,10 @@ into the library. Kotlin DSL build files do not add Kotlin runtime code to this 
 3. Keep the matching `META-INF/LICENSE`, `META-INF/NOTICE`, `META-INF/THIRD_PARTY_LICENSES.md`
    copies in sync with root documents. The standard JAR includes those and the canonical license
    directory without a custom packaging task.
-4. Ship runtime dependencies or provide resolvable dependency metadata. The current plain JAR
-   embeds neither dependencies nor a Maven POM. No remote publication is configured.
+4. Publish the generated POM and Gradle module metadata with the binary, sources and Javadoc JARs.
+   Maven Central and GitHub Packages use `io.github.toxicity188:ysm-converter:<version>`.
+   JitPack uses its `com.github.toxicity188` namespace with the same tag/version. The ordinary
+   JAR embeds no dependency classes. Follow `docs/publishing.md` for credentials and release gates.
 5. Preserve legal files when shading, relocating or embedding. Preserve native resources and
    ImageIO service files. Re-audit actual bundled contents, including platform-specific artifacts.
 6. Exclude `external/examples/`, the model repository and generated/decrypted model outputs from

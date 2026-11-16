@@ -1,0 +1,5 @@
+jdk:
+  - openjdk21
+install:
+  - chmod +x gradlew
+  - ./gradlew verifyReleaseVersion publishToMavenLocal -PreleaseTag="$VERSION" -PsigningEnabled=false -x test --no-configuration-cache

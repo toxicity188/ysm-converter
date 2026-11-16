@@ -6,7 +6,13 @@ Reference revision: 86c48922ecae79c4e9d16bffed1e8becbe849f98
 Original copyright notice, reproduced without correction or abbreviation:
 Copyright (c) [2026] [Yes-Steve-Model Parser (a.k.a. YSMParser)]
 
+Copyright (c) 2026 toxicity188
 Copyright (c) 2026 ysm-converter contributors
+
+toxicity188's notice covers the Java porting work and original additions
+to the extent authored by toxicity188. Original YSMParser and third-party
+copyrights remain with their respective holders. Other contributors retain
+their rights to their own contributions. The Java contributions use MIT.
 
 The original YSMParser and this Java port are distributed under the MIT
 License. The full permission and warranty terms are in LICENSE. The original
